@@ -48,6 +48,10 @@ function classify(code: number, message: string): ApiErrorKind {
   return "server"
 }
 
+export function apiError(code: number, message: string): ApiError {
+  return new ApiError(classify(code, message), message, code)
+}
+
 export async function request<T>(
   method: "GET" | "POST",
   url: string,
@@ -81,7 +85,7 @@ export async function request<T>(
   const code = envelope?.code ?? res.status
   if (!envelope || code !== 200) {
     const message = envelope?.message || res.statusText || "请求失败"
-    throw new ApiError(classify(code, message), message, code)
+    throw apiError(code, message)
   }
   return envelope.data
 }

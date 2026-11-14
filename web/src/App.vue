@@ -3,7 +3,9 @@ import { watchEffect } from "vue"
 import { RouterView } from "vue-router"
 import { FluentTheme } from "@platform-kit/fluent/vue"
 import AppHeader from "@/components/AppHeader.vue"
+import FileOpsHost from "@/components/FileOpsHost.vue"
 import ToastHost from "@/components/ToastHost.vue"
+import UploadPanel from "@/components/UploadPanel.vue"
 import { prefs } from "@/stores/prefs"
 import { session } from "@/stores/session"
 
@@ -24,6 +26,8 @@ watchEffect(() => {
   <FluentTheme :mode="prefs.theme" class="app">
     <AppHeader />
     <RouterView />
+    <FileOpsHost />
+    <UploadPanel />
     <ToastHost />
   </FluentTheme>
 </template>

@@ -24,6 +24,11 @@ export interface FsList {
   provider: string
 }
 
+export interface FsDir {
+  name: string
+  modified: string
+}
+
 export interface FsFile extends FsEntry {
   raw_url: string
   readme: string

@@ -1,7 +1,7 @@
 import { request } from "./http"
-import type { FsFile, FsList, SiteSettings, UserInfo } from "./types"
+import type { FsDir, FsFile, FsList, SiteSettings, UserInfo } from "./types"
 
-export { ApiError, clearToken, getToken, setToken } from "./http"
+export { apiError, ApiError, clearToken, getToken, setToken } from "./http"
 export type { ApiErrorKind } from "./http"
 export * from "./types"
 
@@ -24,4 +24,13 @@ export const api = {
     ),
   fsGet: (path: string, password: string, opts: FsOptions = {}) =>
     request<FsFile>("POST", "/api/fs/get", { path, password }, opts.signal),
+  fsDirs: (path: string, password: string, signal?: AbortSignal) =>
+    request<FsDir[] | null>("POST", "/api/fs/dirs", { path, password }, signal),
+  fsMkdir: (path: string) => request<null>("POST", "/api/fs/mkdir", { path }),
+  fsRename: (path: string, name: string) => request<null>("POST", "/api/fs/rename", { path, name }),
+  fsRemove: (dir: string, names: string[]) => request<null>("POST", "/api/fs/remove", { dir, names }),
+  fsMove: (srcDir: string, dstDir: string, names: string[]) =>
+    request<null>("POST", "/api/fs/move", { src_dir: srcDir, dst_dir: dstDir, names }),
+  fsCopy: (srcDir: string, dstDir: string, names: string[]) =>
+    request<null>("POST", "/api/fs/copy", { src_dir: srcDir, dst_dir: dstDir, names }),
 }

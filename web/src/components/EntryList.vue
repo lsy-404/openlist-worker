@@ -1,17 +1,18 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { RouterLink, useRouter } from "vue-router"
-import { FluentButton, FluentMenu, FluentSvgIcon } from "@platform-kit/fluent/vue"
+import { FluentButton, FluentCheckbox, FluentMenu, FluentSvgIcon } from "@platform-kit/fluent/vue"
 import { actionLabel, actionsFor, type ActionContext } from "@/actions"
 import { createActionContext } from "@/actions/context"
 import type { FsEntry } from "@/api"
 import { prefs, toggleSort, type SortKey } from "@/stores/prefs"
+import { selection, toggleSelection } from "@/stores/selection"
 import { formatDate, formatSize } from "@/utils/format"
 import { iconForEntry, icons } from "@/utils/icons"
 import { entryDownloadUrl } from "@/utils/links"
 import { encodePath, joinPath } from "@/utils/path"
 
-const props = defineProps<{ path: string; entries: FsEntry[]; chunk: number }>()
+const props = defineProps<{ path: string; entries: FsEntry[]; chunk: number; selectable?: boolean; writable?: boolean }>()
 const emit = defineEmits<{ refresh: [] }>()
 const router = useRouter()
 
@@ -42,6 +43,16 @@ onMounted(() => {
 })
 onBeforeUnmount(() => observer?.disconnect())
 
+const names = computed(() => props.entries.map((e) => e.name))
+const selecting = computed(() => selection.names.size > 0)
+let shift = false as boolean
+
+// Label clicks reach the input as synthetic clicks without modifiers, so shift is read from the real pointer or key event
+function pick(name: string) {
+  toggleSelection(name, names.value, shift)
+  shift = false
+}
+
 function href(entry: FsEntry) {
   return encodePath(joinPath(props.path, entry.name))
 }
@@ -55,6 +66,7 @@ function contextFor(entry: FsEntry): ActionContext {
       path,
       entry,
       downloadUrl: entry.is_dir ? null : entryDownloadUrl(path, entry.sign),
+      writable: props.writable,
     },
     { refresh: () => emit("refresh"), navigate: (p) => router.push(encodePath(p)) },
   )
@@ -94,7 +106,7 @@ function ariaSort(key: SortKey) {
 </script>
 
 <template>
-  <div class="entries" :data-view="prefs.view">
+  <div class="entries" :data-view="prefs.view" :class="{ 'entries--selectable': selectable, 'entries--selecting': selecting }">
     <div v-if="prefs.view === 'list'" class="head" role="row">
       <button
         v-for="key in (['name', 'size', 'modified'] as SortKey[])"
@@ -115,7 +127,25 @@ function ariaSort(key: SortKey) {
     </div>
 
     <ul class="items">
-      <li v-for="entry in shown" :key="entry.name" class="entry" @contextmenu="onContextMenu($event, entry)">
+      <li
+        v-for="entry in shown"
+        :key="entry.name"
+        class="entry"
+        :class="{ 'entry--selected': selection.names.has(entry.name) }"
+        @contextmenu="onContextMenu($event, entry)"
+      >
+        <span
+          v-if="selectable"
+          class="entry__check"
+          @mousedown.capture="(e: MouseEvent) => { shift = e.shiftKey; if (shift) e.preventDefault() }"
+          @keydown.capture="(e: KeyboardEvent) => { shift = e.shiftKey }"
+        >
+          <FluentCheckbox
+            :model-value="selection.names.has(entry.name)"
+            :aria-label="`选择 ${entry.name}`"
+            @update:model-value="pick(entry.name)"
+          />
+        </span>
         <RouterLink :to="href(entry)" class="entry__link">
           <span class="entry__icon">
             <img v-if="prefs.view === 'grid' && entry.thumb" :src="entry.thumb" alt="" loading="lazy" />
@@ -252,6 +282,26 @@ function ariaSort(key: SortKey) {
   justify-self: center;
 }
 
+.entries--selectable .head,
+.entries--selectable .entry {
+  padding-inline-start: 44px;
+}
+.entries--selectable .entry__icon {
+  inset-inline-start: 52px;
+}
+.entry__check {
+  position: absolute;
+  inset-inline-start: 12px;
+  top: 0;
+  bottom: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+}
+.entry--selected {
+  background: var(--fluent-control-hover);
+}
+
 .more {
   display: flex;
   justify-content: center;
@@ -326,6 +376,29 @@ function ariaSort(key: SortKey) {
   [data-view="grid"] .entry__more {
     opacity: 1;
   }
+}
+
+[data-view="grid"].entries--selectable .entry {
+  padding: 0;
+}
+[data-view="grid"] .entry__check {
+  inset-inline-start: 6px;
+  top: 6px;
+  bottom: auto;
+  opacity: 0;
+}
+[data-view="grid"] .entry:hover .entry__check,
+[data-view="grid"] .entry__check:focus-within,
+[data-view="grid"].entries--selecting .entry__check {
+  opacity: 1;
+}
+@media (hover: none) {
+  [data-view="grid"] .entry__check {
+    opacity: 1;
+  }
+}
+[data-view="grid"].entries--selectable .entry__icon {
+  inset-inline-start: auto;
 }
 
 /* Phones: size and time collapse into one line under the name */

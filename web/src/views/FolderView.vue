@@ -1,16 +1,21 @@
 <script setup lang="ts">
-import { computed } from "vue"
+import { computed, onBeforeUnmount, ref, watch } from "vue"
 import { useRouter } from "vue-router"
-import { FluentButton, FluentSegmented, FluentSvgIcon } from "@platform-kit/fluent/vue"
+import { FluentButton, FluentCheckbox, FluentSegmented, FluentSvgIcon } from "@platform-kit/fluent/vue"
 import { createActionContext, folderEntry } from "@/actions/context"
 import type { FsList } from "@/api"
 import ActionBar from "@/components/ActionBar.vue"
 import EntryList from "@/components/EntryList.vue"
 import MarkdownView from "@/components/MarkdownView.vue"
 import MenuButton from "@/components/MenuButton.vue"
+import SelectionBar from "@/components/SelectionBar.vue"
 import StateMessage from "@/components/StateMessage.vue"
 import { prefs, type SortKey, type ViewMode } from "@/stores/prefs"
+import { clearSelection, selectAll, selection } from "@/stores/selection"
 import { session } from "@/stores/session"
+import { enqueueUploads, onUploadSettled } from "@/stores/uploads"
+import { notify } from "@/stores/toast"
+import { collectDropped, hasFiles } from "@/utils/dropped"
 import { icons } from "@/utils/icons"
 import { encodePath, splitPath } from "@/utils/path"
 
@@ -50,21 +55,95 @@ const viewOptions = [
   { value: "grid", label: "网格" },
 ]
 
+const handlers = { refresh: () => emit("refresh"), navigate: (p: string) => router.push(encodePath(p)) }
+
 const ctx = computed(() => {
   const name = splitPath(props.path).pop() ?? ""
   return createActionContext(
-    { surface: "toolbar", kind: "folder", path: props.path, entry: folderEntry(name), downloadUrl: null },
-    { refresh: () => emit("refresh"), navigate: (p) => router.push(encodePath(p)) },
+    {
+      surface: "toolbar",
+      kind: "folder",
+      path: props.path,
+      entry: folderEntry(name),
+      downloadUrl: null,
+      writable: props.list.write,
+    },
+    handlers,
   )
 })
+
+const picked = computed(() => sorted.value.filter((e) => selection.names.has(e.name)))
+const selectionCtx = computed(() =>
+  createActionContext(
+    {
+      surface: "selection",
+      kind: "folder",
+      path: props.path,
+      entry: folderEntry(splitPath(props.path).pop() ?? ""),
+      downloadUrl: null,
+      writable: props.list.write,
+      selection: picked.value,
+    },
+    handlers,
+  ),
+)
+const allPicked = computed(() => sorted.value.length > 0 && picked.value.length === sorted.value.length)
+
+watch(() => props.path, clearSelection)
+onBeforeUnmount(clearSelection)
+const stopUploads = onUploadSettled((dir) => {
+  if (dir === props.path) emit("refresh")
+})
+onBeforeUnmount(stopUploads)
+
+const dragging = ref(false)
+let dragDepth = 0
+
+function onDrag(event: DragEvent) {
+  if (!hasFiles(event.dataTransfer)) return
+  event.preventDefault()
+  if (event.dataTransfer) event.dataTransfer.dropEffect = ctx.value.caps.upload ? "copy" : "none"
+  if (event.type === "dragenter") dragDepth++
+  dragging.value = ctx.value.caps.upload
+}
+
+function onDragLeave(event: DragEvent) {
+  if (!hasFiles(event.dataTransfer)) return
+  dragDepth = Math.max(0, dragDepth - 1)
+  if (!dragDepth) dragging.value = false
+}
+
+function onDrop(event: DragEvent) {
+  if (!event.dataTransfer || !hasFiles(event.dataTransfer)) return
+  event.preventDefault()
+  dragDepth = 0
+  dragging.value = false
+  if (!ctx.value.caps.upload) return notify("没有权限在此处上传文件", "danger")
+  const dir = props.path
+  collectDropped(event.dataTransfer).then(
+    (picked) => enqueueUploads(dir, picked),
+    () => notify("无法读取拖入的文件", "danger"),
+  )
+}
 </script>
 
 <template>
-  <section class="folder">
+  <section class="folder" @dragenter="onDrag" @dragover="onDrag" @dragleave="onDragLeave" @drop="onDrop">
+    <div v-if="dragging" class="dropzone" aria-hidden="true">拖放到此处上传到当前文件夹</div>
     <MarkdownView v-if="list.header" :source="list.header" class="panel panel--text" />
 
     <div class="toolbar">
-      <span class="toolbar__count">{{ sorted.length }} 项</span>
+      <span class="toolbar__count">
+        <FluentCheckbox
+          v-if="sorted.length"
+          :model-value="allPicked"
+          :indeterminate="picked.length > 0 && !allPicked"
+          :label="`${sorted.length} 项`"
+          aria-label="全选"
+          @update:model-value="(on: boolean) => (on ? selectAll(sorted.map((e) => e.name)) : clearSelection())"
+        />
+        <template v-else>0 项</template>
+      </span>
       <div class="toolbar__tools">
         <ActionBar :ctx="ctx" />
         <MenuButton
@@ -97,9 +176,19 @@ const ctx = computed(() => {
     </div>
 
     <div class="panel panel--list">
-      <EntryList v-if="sorted.length" :path="path" :entries="sorted" :chunk="chunk" @refresh="emit('refresh')" />
+      <EntryList
+        v-if="sorted.length"
+        :path="path"
+        :entries="sorted"
+        :chunk="chunk"
+        selectable
+        :writable="list.write"
+        @refresh="emit('refresh')"
+      />
       <StateMessage v-else :icon="icons.folderOpen" title="这个文件夹是空的" detail="这里还没有任何文件。" />
     </div>
+
+    <SelectionBar v-if="picked.length" :ctx="selectionCtx" @clear="clearSelection" />
 
     <MarkdownView v-if="list.readme" :source="list.readme" class="panel panel--text" />
   </section>
@@ -107,6 +196,8 @@ const ctx = computed(() => {
 
 <style scoped>
 .folder {
+  position: relative;
+  min-height: 50vh;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -138,5 +229,19 @@ const ctx = computed(() => {
 }
 .panel--text {
   padding: 16px 20px;
+}
+.dropzone {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed var(--fluent-accent-link);
+  border-radius: var(--fluent-panel-radius);
+  background: color-mix(in srgb, var(--fluent-surface) 85%, transparent);
+  font-size: 1.1rem;
+  font-weight: 600;
+  pointer-events: none;
 }
 </style>

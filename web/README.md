@@ -69,7 +69,7 @@ registerAction({
 })
 ```
 
-Actions render in the folder and file toolbars (`ctx.surface === "toolbar"`) and in each entry's menu (`"context"`). `ActionContext` provides the target `entry`, `path`, `kind`, `downloadUrl`, `notify`, `refresh` and `navigate`.
+Actions render in the folder and file toolbars (`ctx.surface === "toolbar"`) and in each entry's menu (`"context"`). `ActionContext` provides the target `entry`, `path`, `kind`, `downloadUrl`, `notify`, `refresh` and `navigate`, plus `dir` (the containing folder), `selection` (entries of the selection bar, surface `"selection"`) and `caps` (which file operations the user may perform). File operations and upload live in `actions/fileops.ts`; `caps` is derived in `actions/permissions.ts` from `/api/me` and the listing's `write` flag.
 
 ## Header search
 

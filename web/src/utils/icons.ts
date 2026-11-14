@@ -26,9 +26,31 @@ import video from "@fluentui/svg-icons/icons/video_24_regular.svg?raw"
 import warning from "@fluentui/svg-icons/icons/warning_24_regular.svg?raw"
 import weatherMoon from "@fluentui/svg-icons/icons/weather_moon_24_regular.svg?raw"
 import weatherSunny from "@fluentui/svg-icons/icons/weather_sunny_24_regular.svg?raw"
+import arrowUpload from "@fluentui/svg-icons/icons/arrow_upload_24_regular.svg?raw"
+import copy from "@fluentui/svg-icons/icons/copy_24_regular.svg?raw"
+import deleteIcon from "@fluentui/svg-icons/icons/delete_24_regular.svg?raw"
+import dismiss from "@fluentui/svg-icons/icons/dismiss_24_regular.svg?raw"
+import arrowCounterclockwise from "@fluentui/svg-icons/icons/arrow_counterclockwise_24_regular.svg?raw"
+import checkmark from "@fluentui/svg-icons/icons/checkmark_24_regular.svg?raw"
+import folderAdd from "@fluentui/svg-icons/icons/folder_add_24_regular.svg?raw"
+import folderArrowUp from "@fluentui/svg-icons/icons/folder_arrow_up_24_regular.svg?raw"
+import arrowMove from "@fluentui/svg-icons/icons/arrow_move_24_regular.svg?raw"
+import rename from "@fluentui/svg-icons/icons/rename_24_regular.svg?raw"
+import selectAllOn from "@fluentui/svg-icons/icons/select_all_on_24_regular.svg?raw"
 import { extension } from "./format"
 
 export const icons = {
+  arrowUpload,
+  copy,
+  deleteIcon,
+  dismiss,
+  arrowCounterclockwise,
+  checkmark,
+  folderAdd,
+  folderArrowUp,
+  arrowMove,
+  rename,
+  selectAllOn,
   archive,
   arrowClockwise,
   arrowDown,

@@ -44,6 +44,7 @@ registerAction({
   label: "复制链接",
   icon: icons.link,
   order: 20,
+  when: (ctx) => ctx.surface !== "selection",
   async run(ctx) {
     const url = ctx.kind === "file" && ctx.downloadUrl ? absoluteUrl(ctx.downloadUrl) : pageUrl(ctx.path)
     ctx.notify((await copyText(url)) ? "链接已复制" : "复制失败，请手动复制地址栏链接", "info")
