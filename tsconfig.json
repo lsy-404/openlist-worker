@@ -11,5 +11,11 @@
     "isolatedModules": false,
     "skipLibCheck": true,
     "resolveJsonModule": true
-  }
+  },
+  "exclude": [
+    "web",
+    "dist",
+    "dist-server",
+    "node_modules"
+  ]
 }

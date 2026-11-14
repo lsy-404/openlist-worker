@@ -42,6 +42,8 @@
   "homepage": "https://doc.oplist.org",
   "scripts": {
     "start": "node dist-server/api/[...route].js",
+    "web:dev": "pnpm --dir web run dev",
+    "web:build": "pnpm --dir web run build",
     "fetch:frontend": "node scripts/fetch-frontend.mjs",
     "build": "node scripts/fetch-frontend.mjs && node scripts/build-edge.mjs",
     "build:edge": "node scripts/build-edge.mjs",
