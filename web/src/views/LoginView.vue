@@ -2,20 +2,27 @@
 import { onMounted } from "vue"
 import { useRoute, useRouter } from "vue-router"
 import { FluentProgressRing } from "@platform-kit/fluent/vue"
-import { setToken } from "@/api"
-import { loadUser, takeReturnPath } from "@/stores/session"
+import { getToken, setToken } from "@/api"
+import { loadUser, rememberReturnPath, safeReturnPath, takeReturnPath } from "@/stores/session"
+import { notify } from "@/stores/toast"
 
 const route = useRoute()
 const router = useRouter()
 
 onMounted(async () => {
-  const token = route.query.token
+  const { token, redirect } = route.query
+  const target = safeReturnPath(redirect)
   if (typeof token === "string" && token) {
+    // The token must not stay in the address bar or history
+    history.replaceState(history.state, "", "/@login")
     setToken(token)
     await loadUser()
-    await router.replace(takeReturnPath())
+    const remembered = takeReturnPath()
+    if (!getToken()) notify("登录失败，已以游客身份继续", "danger")
+    await router.replace(target ?? remembered)
     return
   }
+  if (target) rememberReturnPath(target)
   location.replace("/api/auth/sso?method=sso_get_token")
 })
 </script>

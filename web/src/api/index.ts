@@ -1,9 +1,12 @@
 import { request } from "./http"
 import type { FsDir, FsFile, FsList, SiteSettings, UserInfo } from "./types"
 
-export { apiError, ApiError, clearToken, getToken, setToken } from "./http"
+export { apiError, ApiError, clearToken, getToken, request, setToken, setUnauthorizedHandler } from "./http"
 export type { ApiErrorKind } from "./http"
 export * from "./types"
+
+// 复制、移动、删除在后端同步完成，可能远超普通请求的时限
+const SLOW_MS = 600_000
 
 export interface FsOptions {
   signal?: AbortSignal
@@ -28,9 +31,9 @@ export const api = {
     request<FsDir[] | null>("POST", "/api/fs/dirs", { path, password }, signal),
   fsMkdir: (path: string) => request<null>("POST", "/api/fs/mkdir", { path }),
   fsRename: (path: string, name: string) => request<null>("POST", "/api/fs/rename", { path, name }),
-  fsRemove: (dir: string, names: string[]) => request<null>("POST", "/api/fs/remove", { dir, names }),
+  fsRemove: (dir: string, names: string[]) => request<null>("POST", "/api/fs/remove", { dir, names }, undefined, SLOW_MS),
   fsMove: (srcDir: string, dstDir: string, names: string[]) =>
-    request<null>("POST", "/api/fs/move", { src_dir: srcDir, dst_dir: dstDir, names }),
+    request<null>("POST", "/api/fs/move", { src_dir: srcDir, dst_dir: dstDir, names }, undefined, SLOW_MS),
   fsCopy: (srcDir: string, dstDir: string, names: string[]) =>
-    request<null>("POST", "/api/fs/copy", { src_dir: srcDir, dst_dir: dstDir, names }),
+    request<null>("POST", "/api/fs/copy", { src_dir: srcDir, dst_dir: dstDir, names }, undefined, SLOW_MS),
 }

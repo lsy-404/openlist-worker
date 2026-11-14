@@ -10,6 +10,8 @@ import MarkdownView from "@/components/MarkdownView.vue"
 import MenuButton from "@/components/MenuButton.vue"
 import SelectionBar from "@/components/SelectionBar.vue"
 import StateMessage from "@/components/StateMessage.vue"
+import FolderFilter from "@/search/FolderFilter.vue"
+import { useFolderFilter } from "@/search/useFolderFilter"
 import { prefs, type SortKey, type ViewMode } from "@/stores/prefs"
 import { clearSelection, selectAll, selection } from "@/stores/selection"
 import { session } from "@/stores/session"
@@ -71,6 +73,8 @@ const ctx = computed(() => {
     handlers,
   )
 })
+
+const { filtered, filtering } = useFolderFilter(() => props.path, sorted)
 
 const picked = computed(() => sorted.value.filter((e) => selection.names.has(e.name)))
 const selectionCtx = computed(() =>
@@ -138,13 +142,14 @@ function onDrop(event: DragEvent) {
           v-if="sorted.length"
           :model-value="allPicked"
           :indeterminate="picked.length > 0 && !allPicked"
-          :label="`${sorted.length} 项`"
+          :label="filtering ? `${filtered.length} / ${sorted.length} 项` : `${sorted.length} 项`"
           aria-label="全选"
           @update:model-value="(on: boolean) => (on ? selectAll(sorted.map((e) => e.name)) : clearSelection())"
         />
         <template v-else>0 项</template>
       </span>
       <div class="toolbar__tools">
+        <FolderFilter v-if="sorted.length" />
         <ActionBar :ctx="ctx" />
         <MenuButton
           :icon="icons.arrowSort"
@@ -177,14 +182,15 @@ function onDrop(event: DragEvent) {
 
     <div class="panel panel--list">
       <EntryList
-        v-if="sorted.length"
+        v-if="filtered.length"
         :path="path"
-        :entries="sorted"
+        :entries="filtered"
         :chunk="chunk"
         selectable
         :writable="list.write"
         @refresh="emit('refresh')"
       />
+      <StateMessage v-else-if="filtering" :icon="icons.folderOpen" title="没有匹配的项目" detail="换个关键词，或清除筛选。" />
       <StateMessage v-else :icon="icons.folderOpen" title="这个文件夹是空的" detail="这里还没有任何文件。" />
     </div>
 
