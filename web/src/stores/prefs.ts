@@ -1,4 +1,5 @@
 import { computed, reactive, watch } from "vue"
+import { detectLocale, isLocale, type Locale } from "@/i18n/locales"
 
 export type ThemeMode = "light" | "dark" | "system"
 export type ViewMode = "list" | "grid"
@@ -7,18 +8,23 @@ export type SortOrder = "asc" | "desc"
 
 interface Prefs {
   theme: ThemeMode
+  locale: Locale
   view: ViewMode
   sortKey: SortKey
   sortOrder: SortOrder
 }
 
 const STORAGE_KEY = "ui.prefs"
-const defaults: Prefs = { theme: "system", view: "list", sortKey: "name", sortOrder: "asc" }
+const defaults: Prefs = { theme: "system", locale: detectLocale(navigator.language), view: "list", sortKey: "name", sortOrder: "asc" }
 
 function load(): Prefs {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    if (raw) return { ...defaults, ...JSON.parse(raw) }
+    if (raw) {
+      const stored = { ...defaults, ...JSON.parse(raw) } as Prefs
+      if (!isLocale(stored.locale)) stored.locale = defaults.locale
+      return stored
+    }
   } catch {
     /* storage unavailable or corrupt */
   }
@@ -52,6 +58,10 @@ export function bindThemeToDocument(): void {
     },
     { immediate: true },
   )
+}
+
+export function toggleTheme(): void {
+  prefs.theme = resolvedTheme.value === "dark" ? "light" : "dark"
 }
 
 export function toggleSort(key: SortKey): void {

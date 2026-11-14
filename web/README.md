@@ -1,4 +1,4 @@
-# OpenList Web
+# Drive Web
 
 Vue 3 + TypeScript + Vite frontend for the Worker port, built on `@platform-kit/fluent`.
 
