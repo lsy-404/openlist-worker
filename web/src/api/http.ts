@@ -38,6 +38,13 @@ export function clearToken(): void {
   }
 }
 
+let unauthorizedHandler: ((token: string) => void) | null = null
+
+/** Called when a request sent with a stored token is answered with 401. */
+export function setUnauthorizedHandler(handler: (token: string) => void): void {
+  unauthorizedHandler = handler
+}
+
 // The backend reports a missing object as code 500 with a "not found" message
 const NOT_FOUND = /not found|no such|does not exist/i
 
@@ -53,6 +60,7 @@ export async function request<T>(
   url: string,
   body?: unknown,
   signal?: AbortSignal,
+  timeoutMs = 20_000,
 ): Promise<T> {
   const headers: Record<string, string> = {}
   const token = getToken()
@@ -65,7 +73,7 @@ export async function request<T>(
       method,
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
-      signal,
+      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]) : AbortSignal.timeout(timeoutMs),
     })
   } catch (err) {
     if (signal?.aborted) throw err
@@ -78,7 +86,10 @@ export async function request<T>(
   } catch {
     /* non-JSON response */
   }
+  // A non-JSON server error is a gateway or proxy failure, not an answer from the backend
+  if (!envelope && res.status >= 500) throw new ApiError("network", "无法连接到服务器", res.status)
   const code = envelope?.code ?? res.status
+  if (code === 401 && token) unauthorizedHandler?.(token)
   if (!envelope || code !== 200) {
     const message = envelope?.message || res.statusText || "请求失败"
     throw new ApiError(classify(code, message), message, code)

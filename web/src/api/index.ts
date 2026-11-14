@@ -1,7 +1,7 @@
 import { request } from "./http"
 import type { FsFile, FsList, SiteSettings, UserInfo } from "./types"
 
-export { ApiError, clearToken, getToken, setToken } from "./http"
+export { ApiError, clearToken, getToken, request, setToken, setUnauthorizedHandler } from "./http"
 export type { ApiErrorKind } from "./http"
 export * from "./types"
 

@@ -1,5 +1,6 @@
 import { computed, reactive } from "vue"
-import { api, clearToken, getToken, type SiteSettings, type UserInfo } from "@/api"
+import { api, ApiError, clearToken, getToken, setUnauthorizedHandler, type SiteSettings, type UserInfo } from "@/api"
+import { notify } from "@/stores/toast"
 
 const RETURN_KEY = "login.return"
 
@@ -7,33 +8,76 @@ export const session = reactive<{
   settings: SiteSettings | null
   user: UserInfo | null
   ready: boolean
-}>({ settings: null, user: null, ready: false })
+  unreachable: boolean
+}>({ settings: null, user: null, ready: false, unreachable: false })
 
 export const siteTitle = computed(() => session.settings?.site_title || "OpenList")
 export const isGuest = computed(() => !session.user || session.user.username === "guest")
 export const basePath = computed(() => session.user?.base_path || "/")
 
+// OpenList roles: 0 general, 1 guest, 2 admin
+export const roleLabel = computed(() => {
+  const roles = [session.user?.role ?? 1].flat()
+  return roles.includes(2) ? "管理员" : roles.includes(0) ? "用户" : "游客"
+})
+
+export function safeReturnPath(path: unknown): string | null {
+  if (typeof path !== "string" || !path.startsWith("/")) return null
+  if (path.startsWith("//") || path.startsWith("/\\") || path.startsWith("/@login")) return null
+  return path
+}
+
+let expiredToken = ""
+
+// Dropping the token is deferred so a caller that retries as guest can still see it
+setUnauthorizedHandler((token) => {
+  if (expiredToken === token) return
+  expiredToken = token
+  if (location.pathname !== "/@login") notify("登录已过期，已切换为游客", "info")
+  setTimeout(() => {
+    if (getToken() !== token) return
+    clearToken()
+    void loadUser()
+  }, 0)
+})
+
+function isUnreachable(err: unknown): boolean {
+  return err instanceof ApiError && err.kind === "network"
+}
+
 export async function loadUser(): Promise<void> {
   try {
     session.user = await api.me()
-  } catch {
-    // An expired token must not lock the visitor out of public content
-    if (getToken()) {
-      clearToken()
-      try {
-        session.user = await api.me()
-        return
-      } catch {
-        /* fall through */
-      }
+    return
+  } catch (err) {
+    if (isUnreachable(err)) {
+      session.user = null
+      session.unreachable = true
+      return
     }
-    session.user = null
   }
+  // An expired token must not lock the visitor out of public content
+  if (getToken()) {
+    clearToken()
+    try {
+      session.user = await api.me()
+      return
+    } catch {
+      /* fall through */
+    }
+  }
+  session.user = null
 }
 
 export async function loadSession(): Promise<void> {
-  void api.settings().then((settings) => (session.settings = settings)).catch(() => undefined)
-  await loadUser()
+  session.unreachable = false
+  const settings = api
+    .settings()
+    .then((value) => (session.settings = value))
+    .catch((err) => {
+      if (isUnreachable(err)) session.unreachable = true
+    })
+  await Promise.all([settings, loadUser()])
   session.ready = true
 }
 
@@ -49,12 +93,10 @@ export function takeReturnPath(): string {
   try {
     const path = sessionStorage.getItem(RETURN_KEY)
     sessionStorage.removeItem(RETURN_KEY)
-    // Only same-origin absolute paths are valid return targets
-    if (path && path.startsWith("/") && !path.startsWith("//")) return path
+    return safeReturnPath(path) ?? "/"
   } catch {
-    /* storage unavailable */
+    return "/"
   }
-  return "/"
 }
 
 export async function logout(): Promise<void> {
