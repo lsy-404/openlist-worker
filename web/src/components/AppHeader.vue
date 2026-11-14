@@ -4,7 +4,8 @@ import { RouterLink, useRoute, useRouter } from "vue-router"
 import { FluentButton, FluentSvgIcon } from "@platform-kit/fluent/vue"
 import MenuButton from "@/components/MenuButton.vue"
 import { prefs, type ThemeMode } from "@/stores/prefs"
-import { isGuest, logout, rememberReturnPath, session, siteTitle } from "@/stores/session"
+import SearchBox from "@/search/SearchBox.vue"
+import { isGuest, logout, rememberReturnPath, roleLabel, session, siteTitle } from "@/stores/session"
 import { getToken } from "@/api"
 import { icons } from "@/utils/icons"
 
@@ -19,7 +20,10 @@ const themeItems = [
 const themeIcon = computed(() => (prefs.theme === "dark" ? icons.weatherMoon : prefs.theme === "light" ? icons.weatherSunny : icons.desktop))
 
 const hasToken = !!getToken()
-const userItems = [{ value: "logout", label: "退出登录" }]
+const userItems = computed(() => [
+  { value: "profile", label: `${session.user?.username ?? ""} · ${roleLabel.value}`, disabled: true },
+  { value: "logout", label: "退出登录" },
+])
 
 function login() {
   rememberReturnPath(route.fullPath)
@@ -38,8 +42,7 @@ function onUser(value: string) {
       <span class="brand__title">{{ siteTitle }}</span>
     </RouterLink>
 
-    <!-- Reserved for the future search box; render it here -->
-    <div class="header__search" data-slot="header-search"><slot name="search" /></div>
+    <div class="header__search" data-slot="header-search"><slot name="search"><SearchBox /></slot></div>
 
     <div class="header__tools">
       <MenuButton
@@ -54,14 +57,16 @@ function onUser(value: string) {
         <FluentSvgIcon :svg="icons.person" :size="20" />
         登录
       </FluentButton>
-      <MenuButton
-        v-else-if="!isGuest"
-        :icon="icons.person"
-        :text="session.user?.username"
-        label="账户"
-        :items="userItems"
-        @select="onUser"
-      />
+      <template v-else>
+        <MenuButton
+          :icon="icons.person"
+          :text="session.user?.username"
+          label="账户"
+          :items="userItems"
+          @select="onUser"
+        />
+        <span class="header__role">{{ roleLabel }}</span>
+      </template>
     </div>
   </header>
 </template>
@@ -113,6 +118,19 @@ function onUser(value: string) {
 .header__pending {
   width: 88px;
   height: 32px;
+}
+.header__role {
+  padding: 1px 8px;
+  border: 1px solid var(--fluent-border);
+  border-radius: 999px;
+  color: var(--fluent-muted);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+@media (max-width: 640px) {
+  .header__role {
+    display: none;
+  }
 }
 .header__tools {
   display: flex;

@@ -9,6 +9,8 @@ import EntryList from "@/components/EntryList.vue"
 import MarkdownView from "@/components/MarkdownView.vue"
 import MenuButton from "@/components/MenuButton.vue"
 import StateMessage from "@/components/StateMessage.vue"
+import FolderFilter from "@/search/FolderFilter.vue"
+import { useFolderFilter } from "@/search/useFolderFilter"
 import { prefs, type SortKey, type ViewMode } from "@/stores/prefs"
 import { session } from "@/stores/session"
 import { icons } from "@/utils/icons"
@@ -32,6 +34,8 @@ const sorted = computed(() => {
     return diff && !Number.isNaN(diff) ? Math.sign(diff) * dir : collator.compare(a.name, b.name)
   })
 })
+
+const { filtered, filtering } = useFolderFilter(() => props.path, sorted)
 
 const chunk = computed(() => {
   const size = Number(session.settings?.default_page_size)
@@ -64,8 +68,9 @@ const ctx = computed(() => {
     <MarkdownView v-if="list.header" :source="list.header" class="panel panel--text" />
 
     <div class="toolbar">
-      <span class="toolbar__count">{{ sorted.length }} 项</span>
+      <span class="toolbar__count">{{ filtering ? `${filtered.length} / ${sorted.length}` : sorted.length }} 项</span>
       <div class="toolbar__tools">
+        <FolderFilter v-if="sorted.length" />
         <ActionBar :ctx="ctx" />
         <MenuButton
           :icon="icons.arrowSort"
@@ -97,7 +102,8 @@ const ctx = computed(() => {
     </div>
 
     <div class="panel panel--list">
-      <EntryList v-if="sorted.length" :path="path" :entries="sorted" :chunk="chunk" @refresh="emit('refresh')" />
+      <EntryList v-if="filtered.length" :path="path" :entries="filtered" :chunk="chunk" @refresh="emit('refresh')" />
+      <StateMessage v-else-if="filtering" :icon="icons.folderOpen" title="没有匹配的项目" detail="换个关键词，或清除筛选。" />
       <StateMessage v-else :icon="icons.folderOpen" title="这个文件夹是空的" detail="这里还没有任何文件。" />
     </div>
 
