@@ -1,5 +1,6 @@
 import { Hono } from "hono"
 import { sign } from "hono/jwt"
+import { deleteCookie, getSignedCookie, setSignedCookie } from "hono/cookie"
 import { getDb, saveDb } from "../internal/model/db"
 import { getJwtSecret } from "./middlewares"
 import { generateRandomPassword } from "./auth"
@@ -9,9 +10,9 @@ import { setUserPassword, passwordStampOf } from "../pkg/password"
  * SSO 登录（OAuth2 授权码流 + OIDC）。
  *
  * 支持平台：Github / Microsoft / Google / Dingtalk / Casdoor / OIDC。
- * 纯 fetch + Web Crypto 实现，无外部依赖（OIDC discovery 手写，不验证
- * id_token 签名——code 已通过 client_secret 交换，且走 userinfo 端点，
- * 身份可信）。
+ * 纯 fetch + Web Crypto 实现，无外部依赖。OIDC 走 discovery，使用
+ * state + nonce + PKCE(S256)，并按 JWKS 校验 id_token 的签名、iss、aud、
+ * exp 与 nonce；身份取自校验后的 id_token.sub。
  *
  * 两种模式：
  *  - 默认（弹窗）：回调后 postMessage 回传 { token | sso_id } 给 opener 并关闭。
@@ -20,8 +21,8 @@ import { setUserPassword, passwordStampOf } from "../pkg/password"
 
 export const ssoRouter = new Hono()
 
-const STATE_EXPIRE_MS = 5 * 60 * 1000
-const stateStore = new Map<string, { ip: string; exp: number }>()
+const FLOW_EXPIRE_SECONDS = 5 * 60
+const FLOW_COOKIE = "openlist_sso_flow"
 
 function getSetting(db: any, key: string, def = ""): string {
   const item = (db.settings || []).find((s: any) => s.key === key)
@@ -34,15 +35,6 @@ function getBool(db: any, key: string): boolean {
   return v === "true" || v === "1"
 }
 
-function clientIpOf(c: any): string {
-  return (
-    c.req.header("CF-Connecting-IP") ||
-    c.req.header("x-real-ip") ||
-    c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ||
-    "unknown"
-  )
-}
-
 function apiOrigin(c: any): string {
   try {
     return new URL(c.req.url).origin
@@ -51,20 +43,125 @@ function apiOrigin(c: any): string {
   }
 }
 
-function generateState(clientId: string, ip: string): string {
-  const bytes = new Uint8Array(16)
-  crypto.getRandomValues(bytes)
-  const state = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("")
-  stateStore.set(`${clientId}_${state}`, { ip, exp: Date.now() + STATE_EXPIRE_MS })
-  return state
+function base64Url(bytes: Uint8Array): string {
+  let bin = ""
+  for (const b of bytes) bin += String.fromCharCode(b)
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")
 }
 
-function verifyState(clientId: string, ip: string, state: string): boolean {
-  const key = `${clientId}_${state}`
-  const rec = stateStore.get(key)
-  if (!rec) return false
-  stateStore.delete(key)
-  return rec.ip === ip && rec.exp > Date.now()
+function base64UrlDecode(text: string): Uint8Array {
+  const b64 = text.replace(/-/g, "+").replace(/_/g, "/")
+  const bin = atob(b64.padEnd(Math.ceil(b64.length / 4) * 4, "="))
+  return Uint8Array.from(bin, (ch) => ch.charCodeAt(0))
+}
+
+function randomToken(): string {
+  return base64Url(crypto.getRandomValues(new Uint8Array(32)))
+}
+
+async function pkceChallenge(verifier: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier))
+  return base64Url(new Uint8Array(digest))
+}
+
+function sameText(a: string, b: string): boolean {
+  if (a.length !== b.length) return false
+  let diff = 0
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i)
+  return diff === 0
+}
+
+interface OidcFlow {
+  state: string
+  nonce: string
+  verifier: string
+  method: string
+  exp: number
+}
+
+const flowCookieOptions = { path: "/api/auth", httpOnly: true, secure: true, sameSite: "Lax" as const }
+
+/** 登录流程状态放在签名 Cookie 里，回调落到任意 isolate 都能校验 */
+async function startOidcFlow(c: any, method: string): Promise<OidcFlow> {
+  const flow: OidcFlow = {
+    state: randomToken(),
+    nonce: randomToken(),
+    verifier: randomToken(),
+    method,
+    exp: Math.floor(Date.now() / 1000) + FLOW_EXPIRE_SECONDS,
+  }
+  const value = base64Url(new TextEncoder().encode(JSON.stringify(flow)))
+  await setSignedCookie(c, FLOW_COOKIE, value, await getJwtSecret(c), {
+    ...flowCookieOptions,
+    maxAge: FLOW_EXPIRE_SECONDS,
+  })
+  return flow
+}
+
+async function finishOidcFlow(c: any, method: string, state: string): Promise<OidcFlow | null> {
+  const raw = await getSignedCookie(c, await getJwtSecret(c), FLOW_COOKIE)
+  deleteCookie(c, FLOW_COOKIE, flowCookieOptions)
+  if (!raw) return null
+  let flow: OidcFlow
+  try {
+    flow = JSON.parse(new TextDecoder().decode(base64UrlDecode(raw)))
+  } catch {
+    return null
+  }
+  if (!flow?.state || !flow.nonce || !flow.verifier) return null
+  if (flow.method !== method || flow.exp < Math.floor(Date.now() / 1000)) return null
+  return sameText(flow.state, state) ? flow : null
+}
+
+const ID_TOKEN_ALGS: Record<string, { importParams: any; verifyParams: any }> = {
+  RS256: {
+    importParams: { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    verifyParams: { name: "RSASSA-PKCS1-v1_5" },
+  },
+  ES256: {
+    importParams: { name: "ECDSA", namedCurve: "P-256" },
+    verifyParams: { name: "ECDSA", hash: "SHA-256" },
+  },
+}
+
+/** 校验 id_token：JWKS 签名、iss、aud、exp、nonce；返回 claims */
+async function verifyIdToken(idToken: string, ep: OidcEndpoints, clientId: string, nonce: string): Promise<any> {
+  const parts = idToken.split(".")
+  if (parts.length !== 3) throw new Error("malformed id_token")
+  const header = JSON.parse(new TextDecoder().decode(base64UrlDecode(parts[0])))
+  const alg = ID_TOKEN_ALGS[header.alg]
+  if (!alg) throw new Error("unsupported id_token algorithm")
+  if (!ep.jwksUrl) throw new Error("OIDC provider has no jwks_uri")
+  const jwksResp = await fetch(ep.jwksUrl, { headers: { Accept: "application/json" } })
+  if (!jwksResp.ok) throw new Error(`OIDC jwks fetch failed: HTTP ${jwksResp.status}`)
+  const jwks: any = await jwksResp.json()
+  const candidates = (jwks.keys || []).filter(
+    (k: any) => (!header.kid || k.kid === header.kid) && (!k.use || k.use === "sig") && (!k.alg || k.alg === header.alg),
+  )
+  const signed = new TextEncoder().encode(`${parts[0]}.${parts[1]}`)
+  const signature = base64UrlDecode(parts[2])
+  let verified = false
+  for (const jwk of candidates) {
+    try {
+      const key = await crypto.subtle.importKey("jwk", jwk, alg.importParams, false, ["verify"])
+      if (await crypto.subtle.verify(alg.verifyParams, key, signature as BufferSource, signed as BufferSource)) {
+        verified = true
+        break
+      }
+    } catch {
+      // 该 key 与算法不匹配，继续尝试下一把
+    }
+  }
+  if (!verified) throw new Error("id_token signature verification failed")
+  const claims = JSON.parse(new TextDecoder().decode(base64UrlDecode(parts[1])))
+  const now = Math.floor(Date.now() / 1000)
+  const audience = Array.isArray(claims.aud) ? claims.aud : [claims.aud]
+  if (claims.iss !== ep.issuer) throw new Error("id_token issuer mismatch")
+  if (!audience.includes(clientId)) throw new Error("id_token audience mismatch")
+  if (typeof claims.exp !== "number" || claims.exp <= now) throw new Error("id_token expired")
+  if (typeof claims.nonce !== "string" || !sameText(claims.nonce, nonce)) throw new Error("id_token nonce mismatch")
+  if (!claims.sub) throw new Error("id_token has no sub")
+  return claims
 }
 
 /** 平台预设端点 */
@@ -146,25 +243,36 @@ function platformDef(platform: string, ssoLoginUrl: string, ssoTokenUrl: string,
   }
 }
 
-/** OIDC discovery：获取授权/令牌/userinfo 端点 */
-async function oidcDiscovery(discoveryUrl: string): Promise<{
+interface OidcEndpoints {
+  issuer: string
   authUrl: string
   tokenUrl: string
   userUrl: string
-}> {
+  jwksUrl: string
+  basicAuth: boolean
+}
+
+/** OIDC discovery：获取端点、issuer、JWKS 与令牌端点认证方式 */
+async function oidcDiscovery(discoveryUrl: string): Promise<OidcEndpoints> {
   const url = discoveryUrl.endsWith("/.well-known/openid-configuration")
     ? discoveryUrl
     : discoveryUrl.replace(/\/+$/, "") + "/.well-known/openid-configuration"
   const resp = await fetch(url, { headers: { Accept: "application/json" } })
   if (!resp.ok) throw new Error(`OIDC discovery failed: HTTP ${resp.status}`)
   const doc: any = await resp.json()
-  if (!doc.authorization_endpoint || !doc.token_endpoint) {
+  if (!doc.issuer || !doc.authorization_endpoint || !doc.token_endpoint) {
     throw new Error("OIDC discovery returned incomplete metadata")
   }
+  const authMethods: string[] = Array.isArray(doc.token_endpoint_auth_methods_supported)
+    ? doc.token_endpoint_auth_methods_supported
+    : ["client_secret_basic"]
   return {
+    issuer: doc.issuer,
     authUrl: doc.authorization_endpoint,
     tokenUrl: doc.token_endpoint,
     userUrl: doc.userinfo_endpoint || "",
+    jwksUrl: doc.jwks_uri || "",
+    basicAuth: authMethods.includes("client_secret_basic"),
   }
 }
 
@@ -214,13 +322,13 @@ async function autoRegister(db: any, username: string, ssoId: string): Promise<a
   return user
 }
 
-function postMessageHtml(field: string, value: string): string {
+function postMessageHtml(field: string, value: string, origin: string): string {
   const safe = String(value).replace(/</g, "\\u003c").replace(/>/g, "\\u003e")
   return `<!DOCTYPE html>
 <head></head>
 <body>
 <script>
-window.opener.postMessage({"${field}":"${safe}"}, "*")
+window.opener.postMessage({"${field}":"${safe}"}, ${JSON.stringify(origin)})
 window.close()
 </script>
 </body>`
@@ -252,13 +360,16 @@ ssoRouter.get("/sso", async (c) => {
   try {
     if (platform === "OIDC") {
       const ep = await oidcDiscovery(discoveryUrl || ssoLoginUrl)
-      const state = generateState(clientId, clientIpOf(c))
+      const flow = await startOidcFlow(c, method)
       const params = new URLSearchParams({
         response_type: "code",
         client_id: clientId,
         redirect_uri: redirectUri,
         scope: ssoScopes || "openid profile",
-        state,
+        state: flow.state,
+        nonce: flow.nonce,
+        code_challenge: await pkceChallenge(flow.verifier),
+        code_challenge_method: "S256",
       })
       return c.redirect(`${ep.authUrl}?${params.toString()}`, 302)
     }
@@ -281,12 +392,16 @@ ssoRouter.get("/sso", async (c) => {
 })
 
 // GET /api/auth/sso_callback?method=...&code=...
-ssoRouter.get("/sso_callback", async (c) => {
+ssoRouter.get("/sso_callback", (c) => handleCallback(c, c.req.query("method") || ""))
+// 兼容模式的回调地址：/api/auth/sso_get_token 与 /api/auth/get_sso_id
+ssoRouter.get("/sso_get_token", (c) => handleCallback(c, "sso_get_token"))
+ssoRouter.get("/get_sso_id", (c) => handleCallback(c, "get_sso_id"))
+
+async function handleCallback(c: any, method: string) {
   const db = await getDb(c.env)
   if (!getBool(db, "sso_login_enabled")) {
     return c.text("Single sign-on is not enabled", 403)
   }
-  const method = c.req.query("method") || ""
   if (method !== "get_sso_id" && method !== "sso_get_token") {
     return c.text("invalid request", 400)
   }
@@ -320,47 +435,49 @@ ssoRouter.get("/sso_callback", async (c) => {
       idField = "sub"
       usernameField = "preferred_username"
       scope = ssoScopes || "openid profile"
-      if (!verifyState(clientId, clientIpOf(c), c.req.query("state") || "")) {
+      const flow = await finishOidcFlow(c, method, c.req.query("state") || "")
+      if (!flow) {
         return c.text("incorrect or expired state parameter", 400)
       }
       const code = c.req.query("code") || ""
+      if (!code) return c.text("No code provided", 400)
+      const form: Record<string, string> = {
+        grant_type: "authorization_code",
+        code,
+        redirect_uri: redirectUri,
+        code_verifier: flow.verifier,
+      }
+      const tokenHeaders: Record<string, string> = {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Accept: "application/json",
+      }
+      if (ep.basicAuth) {
+        const credentials = `${encodeURIComponent(clientId)}:${encodeURIComponent(clientSecret)}`
+        tokenHeaders["Authorization"] = `Basic ${btoa(credentials)}`
+      } else {
+        form.client_id = clientId
+        form.client_secret = clientSecret
+      }
       const tokenResp = await fetch(tokenUrl, {
         method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
-        body: new URLSearchParams({
-          grant_type: "authorization_code",
-          code,
-          client_id: clientId,
-          client_secret: clientSecret,
-          redirect_uri: redirectUri,
-          scope,
-        }).toString(),
+        headers: tokenHeaders,
+        body: new URLSearchParams(form).toString(),
       })
       const tokenData: any = await tokenResp.json().catch(() => ({}))
-      accessToken = tokenData.access_token
-      if (!accessToken) throw new Error("no access_token in token response")
-      if (userUrl) {
+      if (!tokenData.id_token) {
+        throw new Error(`token exchange failed: ${tokenData.error || tokenResp.status}`)
+      }
+      const claims = await verifyIdToken(tokenData.id_token, ep, clientId, flow.nonce)
+      accessToken = tokenData.access_token || ""
+      userInfo = { sub: claims.sub, name: claims.preferred_username || claims.name || "" }
+      if (userUrl && accessToken && !userInfo.name) {
         const uResp = await fetch(userUrl, {
           headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" },
         })
-        userInfo = await uResp.json().catch(() => ({}))
-        const name = userInfo?.preferred_username || userInfo?.name || userInfo?.nickname || ""
-        if (!userInfo?.sub && !name) {
-          // 回退：解析 id_token payload 的 name 字段
-          const idToken = tokenData.id_token
-          if (idToken) {
-            const payload = parseJwtPayload(idToken)
-            userInfo = userInfo || {}
-            userInfo.sub = userInfo.sub || payload?.sub
-            userInfo.name = name || payload?.name || payload?.preferred_username || ""
-          }
+        const profile: any = await uResp.json().catch(() => ({}))
+        if (profile?.sub === claims.sub) {
+          userInfo.name = profile.preferred_username || profile.name || profile.nickname || ""
         }
-        if (name) userInfo.name = name
-      } else {
-        const idToken = tokenData.id_token
-        if (!idToken) throw new Error("no id_token and no userinfo endpoint")
-        userInfo = parseJwtPayload(idToken) || {}
-        userInfo.sub = userInfo.sub || userInfo.name || ""
       }
     } else {
       const def = platformDef(platform, ssoLoginUrl, ssoTokenUrl, ssoUserinfoUrl, ssoScopes)
@@ -418,7 +535,10 @@ ssoRouter.get("/sso_callback", async (c) => {
       userInfo = await uResp.json().catch(() => ({}))
     }
 
-    const userID = String(userInfo?.id ?? userInfo?.sub ?? userInfo?.[idField] ?? "")
+    const userID =
+      platform === "OIDC"
+        ? String(userInfo?.sub ?? "")
+        : String(userInfo?.id ?? userInfo?.sub ?? userInfo?.[idField] ?? "")
     if (!userID || userID === "0") {
       return c.text("cannot get user id from SSO provider", 400)
     }
@@ -427,7 +547,7 @@ ssoRouter.get("/sso_callback", async (c) => {
       if (useCompat) {
         return c.redirect(`${apiOrigin(c)}/@manage?sso_id=${encodeURIComponent(userID)}`, 302)
       }
-      return c.html(postMessageHtml("sso_id", userID))
+      return c.html(postMessageHtml("sso_id", userID, apiOrigin(c)))
     }
 
     // sso_get_token
@@ -444,22 +564,8 @@ ssoRouter.get("/sso_callback", async (c) => {
     if (useCompat) {
       return c.redirect(`${apiOrigin(c)}/@login?token=${encodeURIComponent(token)}`, 302)
     }
-    return c.html(postMessageHtml("token", token))
+    return c.html(postMessageHtml("token", token, apiOrigin(c)))
   } catch (e: any) {
     return c.text(e.message || "SSO error", 500)
-  }
-})
-
-/** 解析 JWT payload（仅解码，不验证签名——OIDC 下 code 已交换） */
-function parseJwtPayload(token: string): any {
-  try {
-    const parts = token.split(".")
-    if (parts.length < 2) return null
-    const payload = parts[1].replace(/-/g, "+").replace(/_/g, "/")
-    const padded = payload.padEnd(Math.ceil(payload.length / 4) * 4, "=")
-    const decoded = atob(padded)
-    return JSON.parse(decoded)
-  } catch {
-    return null
   }
 }

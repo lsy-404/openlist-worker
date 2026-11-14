@@ -1,5 +1,6 @@
 import { Hono } from "hono"
 import { setupRouter } from "./server/router"
+import { ssoOnlyGuard } from "./server/sso_only"
 import { rawRouter } from "./server/raw"
 import {
   assetsRouter,
@@ -79,6 +80,8 @@ const KV_PROXY_PATHS = ["/kv-list", "/kv-get", "/kv-put", "/kv-delete"]
 function isKvProxyPath(pathname: string): boolean {
   return KV_PROXY_PATHS.includes(pathname)
 }
+
+app.use("*", ssoOnlyGuard)
 
 app.use("*", async (c, next) => {
   // 关键：每个请求注入 KV binding 上下文（CF Workers 多实例/冷启动时
