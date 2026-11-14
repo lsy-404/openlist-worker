@@ -1,7 +1,12 @@
+import { sharedOrOwn } from "../pkg/inflight"
 import { Context } from "hono"
 import { verify } from "hono/jwt"
 import { checkAdminAuth, isStaticApiToken } from "../pkg/utils"
-import { getDb, readPersistedSecret, ENCRYPTION_SECRET_KV_KEY } from "../internal/model/db"
+import {
+  getDb,
+  readPersistedSecret,
+  ENCRYPTION_SECRET_KV_KEY,
+} from "../internal/model/db"
 import { isPasswordStampValid } from "../pkg/password"
 
 // 不再硬编码 JWT 密钥。优先使用环境变量 JWT_SECRET（推荐在生产配置），
@@ -160,22 +165,22 @@ export async function getJwtSecret(c?: Context | any): Promise<string> {
     const generated = generateRandomSecret()
     rememberJwtSecret(env, generated)
     const persisted = await writeKvSecret(env, generated)
-    
+
     if (isProduction) {
       console.error(
         "[JWT] ⚠️ 🔴 生产环境安全警告：JWT_SECRET 未配置！" +
-        (persisted
-          ? "\n✅ 已自动生成密钥并持久化到 KV。此密钥将持续使用，但强烈建议手动配置 JWT_SECRET 环境变量以提高安全性。"
-          : "\n❌ 无法持久化密钥到 KV！密钥仅存于内存，重启后所有 token 将失效。请立即配置 JWT_SECRET 环境变量！") +
-        "\n\n🔒 安全建议：生成密钥命令: openssl rand -hex 32"
+          (persisted
+            ? "\n✅ 已自动生成密钥并持久化到 KV。此密钥将持续使用，但强烈建议手动配置 JWT_SECRET 环境变量以提高安全性。"
+            : "\n❌ 无法持久化密钥到 KV！密钥仅存于内存，重启后所有 token 将失效。请立即配置 JWT_SECRET 环境变量！") +
+          "\n\n🔒 安全建议：生成密钥命令: openssl rand -hex 32",
       )
     } else {
       console.warn(
         "[JWT] ⚠️  开发环境警告：JWT_SECRET 未配置，使用临时随机密钥。" +
-        (persisted
-          ? "密钥已持久化到 KV，重启后保持有效。"
-          : "密钥仅存于内存，重启后所有 token 将失效。") +
-        "\n生产环境部署前，建议配置 32+ 字符的 JWT_SECRET 环境变量（推荐而非强制）。"
+          (persisted
+            ? "密钥已持久化到 KV，重启后保持有效。"
+            : "密钥仅存于内存，重启后所有 token 将失效。") +
+          "\n生产环境部署前，建议配置 32+ 字符的 JWT_SECRET 环境变量（推荐而非强制）。",
       )
     }
   }
@@ -203,27 +208,30 @@ let revokedInflight: Promise<void> | null = null
 
 async function ensureRevokedLoaded(env: any): Promise<void> {
   if (Date.now() - revokedLoadedAt < REVOKED_RELOAD_MS) return
-  if (revokedInflight) return revokedInflight
-  revokedInflight = (async () => {
-    try {
-      const { readPersistedSecret } = await import("../internal/model/db")
-      const raw = await readPersistedSecret(env, REVOKED_KV_KEY)
-      if (raw) {
-        const arr = JSON.parse(String(raw))
-        const now = Math.floor(Date.now() / 1000)
-        for (const item of arr) {
-          if (item && item.jti && item.exp > now) revokedJtis.add(item.jti)
+  return sharedOrOwn(revokedInflight, () => {
+    let run: Promise<void> | null = null
+    run = (async () => {
+      try {
+        const { readPersistedSecret } = await import("../internal/model/db")
+        const raw = await readPersistedSecret(env, REVOKED_KV_KEY)
+        if (raw) {
+          const arr = JSON.parse(String(raw))
+          const now = Math.floor(Date.now() / 1000)
+          for (const item of arr) {
+            if (item && item.jti && item.exp > now) revokedJtis.add(item.jti)
+          }
         }
+      } catch {
+        // 黑名单读取失败时降级为不拦截（不影响登录）
+      } finally {
+        // 无论成功失败都推迟下次回读，避免存储故障时被反复打爆
+        revokedLoadedAt = Date.now()
+        if (revokedInflight === run) revokedInflight = null
       }
-    } catch {
-      // 黑名单读取失败时降级为不拦截（不影响登录）
-    } finally {
-      // 无论成功失败都推迟下次回读，避免存储故障时被反复打爆
-      revokedLoadedAt = Date.now()
-      revokedInflight = null
-    }
-  })()
-  return revokedInflight
+    })()
+    revokedInflight = run
+    return run
+  })
 }
 
 export async function revokeToken(
@@ -235,9 +243,8 @@ export async function revokeToken(
   // 本实例立即生效
   revokedJtis.add(jti)
   try {
-    const { readPersistedSecret, writePersistedSecret } = await import(
-      "../internal/model/db"
-    )
+    const { readPersistedSecret, writePersistedSecret } =
+      await import("../internal/model/db")
     let arr: Array<{ jti: string; exp: number }> = []
     const raw = await readPersistedSecret(env, REVOKED_KV_KEY)
     if (raw) {
@@ -342,7 +349,9 @@ export async function generateCSRFToken(c: Context): Promise<string> {
   const token = await sign(
     {
       type: "csrf",
-      jti: crypto.randomUUID ? crypto.randomUUID() : generateRandomSecret().slice(0, 16),
+      jti: crypto.randomUUID
+        ? crypto.randomUUID()
+        : generateRandomSecret().slice(0, 16),
       exp: Math.floor(Date.now() / 1000) + 3600, // 1 小时过期
     },
     secret,
@@ -353,15 +362,12 @@ export async function generateCSRFToken(c: Context): Promise<string> {
 /**
  * CSRF 保护中间件：对 POST/PUT/DELETE/PATCH 请求验证 CSRF token
  * GET/HEAD/OPTIONS 请求豁免检查
- * 
+ *
  * 安全增强 (2026-09-08):
  * - 仅允许从 HTTP Header 获取 token（移除 Query 和 Body 获取）
  * - 防止 JSON 劫持和 URL 泄露攻击
  */
-export async function csrfProtection(
-  c: Context,
-  next: () => Promise<void>,
-) {
+export async function csrfProtection(c: Context, next: () => Promise<void>) {
   const method = c.req.method.toUpperCase()
 
   // GET/HEAD/OPTIONS 请求无需 CSRF 验证
@@ -412,10 +418,7 @@ export async function csrfProtection(
  * 审计日志中间件：记录所有状态修改操作
  * 仅记录 POST/PUT/DELETE/PATCH 请求
  */
-export async function auditMiddleware(
-  c: Context,
-  next: () => Promise<void>,
-) {
+export async function auditMiddleware(c: Context, next: () => Promise<void>) {
   const startTime = Date.now()
   const method = c.req.method.toUpperCase()
   const path = c.req.path
@@ -431,7 +434,8 @@ export async function auditMiddleware(
       const user = await getUserFromContext(c).catch(() => null)
       const duration = Date.now() - startTime
       const statusCode = c.res.status || 200
-      const status = statusCode >= 200 && statusCode < 400 ? "success" : "failure"
+      const status =
+        statusCode >= 200 && statusCode < 400 ? "success" : "failure"
 
       // 获取客户端 IP
       const ip =

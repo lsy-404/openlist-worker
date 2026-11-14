@@ -1,3 +1,4 @@
+import { sharedOrOwn } from "../../pkg/inflight"
 import {
   __resetCipherKeyCacheForTest,
   cipherPrefix,
@@ -1508,24 +1509,23 @@ export const getDb = async (envCtx?: any) => {
   const cacheKey = envCtx || resolveNoArgKey()
   if (!cacheKey) return loadDb(envCtx)
 
-  // 1) Concurrent de-duplication: concurrent callers share a single KV read.
-  const pending = dbInflight.get(cacheKey)
-  if (pending) return pending
-
-  // 2) Short-TTL memoization: sequential calls in one request reuse the result.
+  // Short-TTL memoization: sequential calls in one request reuse the result.
   const hit = dbCache.get(cacheKey)
   if (hit && Date.now() - hit.ts < DB_CACHE_TTL_MS) return hit.db
 
-  const promise = loadDb(envCtx)
-    .then((db) => {
-      dbCache.set(cacheKey, { ts: Date.now(), db })
-      return db
-    })
-    .finally(() => {
-      dbInflight.delete(cacheKey)
-    })
-  dbInflight.set(cacheKey, promise)
-  return promise
+  // Concurrent de-duplication: concurrent callers share a single read.
+  return sharedOrOwn(dbInflight.get(cacheKey), () => {
+    const promise: Promise<any> = loadDb(envCtx)
+      .then((db) => {
+        dbCache.set(cacheKey, { ts: Date.now(), db })
+        return db
+      })
+      .finally(() => {
+        if (dbInflight.get(cacheKey) === promise) dbInflight.delete(cacheKey)
+      })
+    dbInflight.set(cacheKey, promise)
+    return promise
+  })
 }
 
 /**

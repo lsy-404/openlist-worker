@@ -1,3 +1,4 @@
+import { sharedOrOwn } from "../../pkg/inflight"
 import { resolvePath, getDb, getSettings, saveDb } from "../model/db"
 import { isSafeUrl } from "../../pkg/http"
 import { encodeDownloadPath } from "../../pkg/path"
@@ -149,22 +150,28 @@ export interface GetDriverOptions {
   deferTokenPersistence?: boolean
 }
 
+// 驱动初始化可能较慢，接管等待放宽
+const DRIVER_TAKEOVER_MS = 8000
+
 export async function getOrCreateDriver(
   cache: Map<string, Promise<StorageDriver>>,
   key: string,
   factory: () => Promise<StorageDriver>,
 ): Promise<StorageDriver> {
-  const existing = cache.get(key)
-  if (existing) return existing
-
-  const pending = factory()
-  cache.set(key, pending)
-  try {
-    return await pending
-  } catch (error) {
-    if (cache.get(key) === pending) cache.delete(key)
-    throw error
-  }
+  return sharedOrOwn(
+    cache.get(key),
+    async () => {
+      const pending = factory()
+      cache.set(key, pending)
+      try {
+        return await pending
+      } catch (error) {
+        if (cache.get(key) === pending) cache.delete(key)
+        throw error
+      }
+    },
+    DRIVER_TAKEOVER_MS,
+  )
 }
 
 function parseAddition(storageConfig?: any): any {
@@ -286,10 +293,10 @@ async function createDriver(
   ) {
     driver = new QuarkDriver(parseAddition(storageConfig))
     await driver.init?.()
-  // 注意：115 / 115Open 统一走 Pan115Driver（115open 目录）。
-  // 旧 drivers/115（Client115）端点写成 /open + /open/ufile/files → /open/open/ufile/files，
-  // 且用 POST+JSON，115 开放平台实际要求 GET+query，会报 "Method POST does not exist"，
-  // 再经错误模板输出为 "[115] API error ()"。该分支已在下方 normDriver.startsWith("115") 处理。
+    // 注意：115 / 115Open 统一走 Pan115Driver（115open 目录）。
+    // 旧 drivers/115（Client115）端点写成 /open + /open/ufile/files → /open/open/ufile/files，
+    // 且用 POST+JSON，115 开放平台实际要求 GET+query，会报 "Method POST does not exist"，
+    // 再经错误模板输出为 "[115] API error ()"。该分支已在下方 normDriver.startsWith("115") 处理。
   } else if (
     normDriver === "cloudreve" ||
     normDriver === "cloudrevev3" ||
@@ -1069,7 +1076,9 @@ async function createDriver(
     driver = new MegaDriver(addition, async (session) => {
       try {
         const db = await getDb()
-        const st = (db.storages || []).find((s: any) => s.id === storageConfig?.id)
+        const st = (db.storages || []).find(
+          (s: any) => s.id === storageConfig?.id,
+        )
         if (!st) return
         const stAddition =
           typeof st.addition === "string"
@@ -1307,8 +1316,8 @@ export async function getDriver(
 ): Promise<StorageDriver> {
   const deferTokenPersistence = Boolean(
     options.deferTokenPersistence &&
-      storageConfig &&
-      typeof storageConfig === "object",
+    storageConfig &&
+    typeof storageConfig === "object",
   )
   if (deferTokenPersistence) deferredTokenPersistence.add(storageConfig)
 
