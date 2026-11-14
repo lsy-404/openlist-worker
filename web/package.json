@@ -1,5 +1,5 @@
 {
-  "name": "openlist-web",
+  "name": "drive-web",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -17,6 +17,7 @@
     "highlight.js": "^11.12.0",
     "marked": "^16.0.0",
     "vue": "^3.5.0",
+    "vue-i18n": "^11.4.20",
     "vue-router": "^4.5.0"
   },
   "devDependencies": {

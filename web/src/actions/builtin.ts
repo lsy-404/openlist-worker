@@ -1,3 +1,4 @@
+import { t } from "@/i18n"
 import { icons } from "@/utils/icons"
 import { absoluteUrl } from "@/utils/path"
 import { pageUrl } from "@/utils/links"
@@ -23,7 +24,7 @@ async function copyText(text: string): Promise<boolean> {
 
 registerAction({
   id: "download",
-  label: "下载",
+  label: () => t("files.actions.download"),
   icon: icons.arrowDownload,
   order: 10,
   primary: true,
@@ -41,12 +42,12 @@ registerAction({
 
 registerAction({
   id: "copy-link",
-  label: "复制链接",
+  label: () => t("files.actions.copyLink"),
   icon: icons.link,
   order: 20,
   when: (ctx) => ctx.surface !== "selection",
   async run(ctx) {
     const url = ctx.kind === "file" && ctx.downloadUrl ? absoluteUrl(ctx.downloadUrl) : pageUrl(ctx.path)
-    ctx.notify((await copyText(url)) ? "链接已复制" : "复制失败，请手动复制地址栏链接", "info")
+    ctx.notify((await copyText(url)) ? t("files.notices.linkCopied") : t("files.notices.copyFailed"), "info")
   },
 })

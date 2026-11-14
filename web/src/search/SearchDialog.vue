@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n"
 import { computed, onBeforeUnmount, ref, watch } from "vue"
 import { RouterLink, useRoute } from "vue-router"
 import search from "@fluentui/svg-icons/icons/search_24_regular.svg?raw"
@@ -13,12 +14,13 @@ import { encodePath, joinPath, normalizePath, parentPath } from "@/utils/path"
 import { searchFiles, type SearchHit } from "./api"
 import { searchUi, type SearchScope } from "./state"
 
+const { t } = useI18n()
 const route = useRoute()
 
-const scopeOptions = [
-  { value: "folder", label: "当前文件夹" },
-  { value: "site", label: "全站" },
-]
+const scopeOptions = computed(() => [
+  { value: "folder", label: t("search.dialog.scopeFolder") },
+  { value: "site", label: t("search.dialog.scopeSite") },
+])
 
 const folder = computed(() => {
   if (searchUi.folder) return searchUi.folder
@@ -113,15 +115,15 @@ function close() {
 </script>
 
 <template>
-  <FluentDialog :open="searchUi.open" label="搜索" close-on-outside @close="close">
+  <FluentDialog :open="searchUi.open" :label="t('search.dialog.label')" close-on-outside @close="close">
     <template #title>
-      <h2 class="title">搜索“{{ searchUi.query }}”</h2>
+      <h2 class="title">{{ t("search.dialog.title", { query: searchUi.query }) }}</h2>
     </template>
 
     <div ref="body" class="body" @keydown="onKeydown">
       <div class="bar">
         <FluentSegmented
-          label="搜索范围"
+          :label="t('search.dialog.scopeLabel')"
           :model-value="searchUi.scope"
           :options="scopeOptions"
           @update:model-value="(v: string) => (searchUi.scope = v as SearchScope)"
@@ -131,30 +133,30 @@ function close() {
 
       <div class="results" aria-live="polite">
         <div v-if="loading && !hits.length" class="busy">
-          <FluentProgressRing :size="28" indeterminate label="正在搜索" />
-          <p>正在搜索，目录较多时可能需要一些时间</p>
+          <FluentProgressRing :size="28" indeterminate :label="t('search.dialog.searching')" />
+          <p>{{ t("search.dialog.searchingHint") }}</p>
         </div>
 
         <StateMessage
           v-else-if="error && !hits.length"
           :icon="icons.warning"
-          :title="unavailable ? '搜索暂不可用' : error.kind === 'network' ? '无法连接到服务器' : '搜索失败'"
+          :title="unavailable ? t('search.dialog.unavailable') : error.kind === 'network' ? t('errors.network') : t('search.dialog.failed')"
           :detail="error.message"
         >
-          <FluentButton v-if="!unavailable" tone="primary" @click="start">重试</FluentButton>
+          <FluentButton v-if="!unavailable" tone="primary" @click="start">{{ t("common.retry") }}</FluentButton>
         </StateMessage>
 
         <StateMessage
           v-else-if="done && !hits.length"
           :icon="search"
-          title="没有找到匹配项"
-          :detail="searchUi.scope === 'folder' ? '当前文件夹及其子文件夹中没有匹配的名称。' : '全站没有匹配的名称。'"
+          :title="t('search.dialog.noResults')"
+          :detail="searchUi.scope === 'folder' ? t('search.dialog.noResultsFolder') : t('search.dialog.noResultsSite')"
         >
-          <FluentButton v-if="searchUi.scope === 'folder' && parent !== '/'" @click="searchUi.scope = 'site'">在全站搜索</FluentButton>
+          <FluentButton v-if="searchUi.scope === 'folder' && parent !== '/'" @click="searchUi.scope = 'site'">{{ t("search.dialog.searchSite") }}</FluentButton>
         </StateMessage>
 
         <template v-else-if="hits.length">
-          <p class="count">共 {{ totalText }} 项</p>
+          <p class="count">{{ t("search.dialog.count", { count: totalText }) }}</p>
           <ul class="list">
             <li v-for="(hit, i) in hits" :key="`${hit.parent}/${hit.name}/${i}`">
               <RouterLink class="hit" :to="target(hit)" @click="close">
@@ -163,14 +165,14 @@ function close() {
                   <span class="hit__name">{{ hit.name }}</span>
                   <span class="hit__path">{{ relative(hit.parent) }}</span>
                 </span>
-                <span class="hit__size">{{ hit.is_dir ? "文件夹" : formatSize(hit.size) }}</span>
+                <span class="hit__size">{{ hit.is_dir ? t("search.dialog.folder") : formatSize(hit.size) }}</span>
               </RouterLink>
             </li>
           </ul>
           <p v-if="error" class="inline-error" role="alert">{{ error.message }}</p>
           <div v-if="hasMore || error" class="more">
             <FluentButton :busy="loading" @click="load(page + 1)">
-              {{ error ? "重试" : `加载更多（还有 ${total - hits.length} 项）` }}
+              {{ error ? t("common.retry") : t("search.dialog.loadMore", { count: total - hits.length }) }}
             </FluentButton>
           </div>
         </template>
@@ -178,7 +180,7 @@ function close() {
     </div>
 
     <template #footer>
-      <FluentButton @click="close">关闭</FluentButton>
+      <FluentButton @click="close">{{ t("common.close") }}</FluentButton>
     </template>
   </FluentDialog>
 </template>

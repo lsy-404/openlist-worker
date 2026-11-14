@@ -1,15 +1,18 @@
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
+import { useI18n } from "vue-i18n"
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import dismiss from "@fluentui/svg-icons/icons/dismiss_24_regular.svg?raw"
 import search from "@fluentui/svg-icons/icons/search_24_regular.svg?raw"
 import { FluentButton, FluentSvgIcon } from "@platform-kit/fluent/vue"
 import SearchDialog from "./SearchDialog.vue"
 import { openSearch, searchUi } from "./state"
 
+const { t } = useI18n()
 const text = ref(searchUi.query)
 const expanded = ref(false)
 const input = ref<HTMLInputElement | null>(null)
-const placeholder = `搜索文件  ${/Mac|iPhone|iPad/.test(navigator.platform) ? "⌘" : "Ctrl"} K`
+const shortcutKey = /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘" : "Ctrl"
+const placeholder = computed(() => t("search.box.placeholder", { key: shortcutKey }))
 
 async function focusInput() {
   expanded.value = true
@@ -45,7 +48,7 @@ watch(() => searchUi.focusTick, focusInput)
 
 <template>
   <div class="box" :class="{ 'box--open': expanded }" role="search">
-    <FluentButton class="box__toggle" tone="subtle" icon-only aria-label="搜索" title="搜索 (Ctrl+K)" @click="focusInput">
+    <FluentButton class="box__toggle" tone="subtle" icon-only :aria-label="t('search.box.toggle')" :title="t('search.box.toggleTitle')" @click="focusInput">
       <FluentSvgIcon :svg="search" :size="20" />
     </FluentButton>
 
@@ -58,12 +61,12 @@ watch(() => searchUi.focusTick, focusInput)
         type="search"
         enterkeyhint="search"
         :placeholder="placeholder"
-        aria-label="搜索文件"
+        :aria-label="t('search.box.field')"
         autocomplete="off"
         spellcheck="false"
         @keydown.esc.prevent="onEscape"
       />
-      <button class="box__close" type="button" aria-label="关闭搜索" @click="expanded = false">
+      <button class="box__close" type="button" :aria-label="t('search.box.close')" @click="expanded = false">
         <FluentSvgIcon :svg="dismiss" :size="16" />
       </button>
     </form>

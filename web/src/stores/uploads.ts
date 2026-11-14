@@ -1,6 +1,7 @@
 import { markRaw, reactive } from "vue"
 import { api } from "@/api"
 import { uploadFile } from "@/api/upload"
+import { t } from "@/i18n"
 import { askConflict } from "@/stores/dialogs"
 import { passwordFor } from "@/stores/passwords"
 import { notify } from "@/stores/toast"
@@ -210,7 +211,7 @@ export async function enqueueUploads(dir: string, selection: UploadSelection): P
   }))
   if (!items.length) {
     if (selection.dirs.length) listeners.forEach((fn) => fn(dir))
-    else notify("没有需要上传的文件", "info")
+    else notify(t("files.notices.nothingToUpload"), "info")
     return
   }
   batchDirs.set(batch, dir)

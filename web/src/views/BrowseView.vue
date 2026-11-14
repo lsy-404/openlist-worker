@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n"
 import { computed, ref, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 import { FluentButton, FluentProgressBar } from "@platform-kit/fluent/vue"
@@ -12,6 +13,7 @@ import FileView from "./FileView.vue"
 import FolderView from "./FolderView.vue"
 import { useBrowse } from "./useBrowse"
 
+const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 
@@ -45,33 +47,33 @@ function up() {
     <Breadcrumb :path="path" />
 
     <div class="content" :aria-busy="loading">
-      <FluentProgressBar v-if="loading" class="content__bar" indeterminate label="加载中" />
+      <FluentProgressBar v-if="loading" class="content__bar" indeterminate :label="t('common.loading')" />
 
       <StateMessage
         v-if="notFound"
         :icon="icons.folderOpen"
-        title="找不到这个位置"
-        detail="路径不存在，或者已被移动、删除。"
+        :title="t('browse.state.notFound')"
+        :detail="t('browse.state.notFoundDetail')"
       >
-        <FluentButton v-if="path !== '/'" @click="up">返回上一级</FluentButton>
-        <FluentButton tone="primary" @click="router.push('/')">回到首页</FluentButton>
+        <FluentButton v-if="path !== '/'" @click="up">{{ t("browse.state.up") }}</FluentButton>
+        <FluentButton tone="primary" @click="router.push('/')">{{ t("browse.state.home") }}</FluentButton>
       </StateMessage>
 
       <div v-else-if="initial && !locked" class="skeleton" aria-hidden="true">
         <span v-for="n in 8" :key="n" class="skeleton__row" />
       </div>
 
-      <StateMessage v-else-if="locked" :icon="icons.lockClosed" title="此位置需要密码" detail="输入访问密码后才能查看内容。">
-        <FluentButton tone="primary" @click="dialogOpen = true">输入密码</FluentButton>
+      <StateMessage v-else-if="locked" :icon="icons.lockClosed" :title="t('browse.state.locked')" :detail="t('browse.state.lockedDetail')">
+        <FluentButton tone="primary" @click="dialogOpen = true">{{ t("browse.state.enterPassword") }}</FluentButton>
       </StateMessage>
 
       <StateMessage
         v-else-if="error"
         :icon="icons.warning"
-        :title="error.kind === 'network' ? '无法连接到服务器' : '加载失败'"
+        :title="error.kind === 'network' ? t('errors.network') : t('errors.loadFailed')"
         :detail="error.message"
       >
-        <FluentButton tone="primary" @click="reload()">重试</FluentButton>
+        <FluentButton tone="primary" @click="reload()">{{ t("common.retry") }}</FluentButton>
       </StateMessage>
 
       <template v-else-if="resource">

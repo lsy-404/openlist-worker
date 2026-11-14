@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n"
 import { computed } from "vue"
 import { useRouter } from "vue-router"
 import { FluentSvgIcon } from "@platform-kit/fluent/vue"
@@ -12,6 +13,7 @@ import { iconForEntry } from "@/utils/icons"
 import { entryDownloadUrl } from "@/utils/links"
 import { encodePath } from "@/utils/path"
 
+const { t } = useI18n()
 const props = defineProps<{ path: string; file: FsFile }>()
 const emit = defineEmits<{ refresh: [] }>()
 const router = useRouter()
@@ -34,11 +36,11 @@ const ctx = computed(() =>
         <h1 class="summary__name">{{ file.name }}</h1>
         <dl class="summary__meta">
           <div>
-            <dt>大小</dt>
+            <dt>{{ t("browse.file.size") }}</dt>
             <dd>{{ formatSize(file.size) }}</dd>
           </div>
           <div>
-            <dt>修改时间</dt>
+            <dt>{{ t("browse.file.modified") }}</dt>
             <dd>{{ formatDate(file.modified) }}</dd>
           </div>
         </dl>

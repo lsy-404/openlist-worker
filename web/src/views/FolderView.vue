@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n"
 import { computed, onBeforeUnmount, ref, watch } from "vue"
 import { useRouter } from "vue-router"
 import { FluentButton, FluentCheckbox, FluentSegmented, FluentSvgIcon } from "@platform-kit/fluent/vue"
@@ -25,7 +26,8 @@ const props = defineProps<{ path: string; list: FsList; refreshing: boolean }>()
 const emit = defineEmits<{ refresh: [] }>()
 const router = useRouter()
 
-const collator = new Intl.Collator("zh-CN", { numeric: true, sensitivity: "base" })
+const { t, locale } = useI18n()
+const collator = computed(() => new Intl.Collator(locale.value, { numeric: true, sensitivity: "base" }))
 
 const sorted = computed(() => {
   const dir = prefs.sortOrder === "asc" ? 1 : -1
@@ -33,10 +35,10 @@ const sorted = computed(() => {
   return [...(props.list.content ?? [])].sort((a, b) => {
     if (a.is_dir !== b.is_dir) return a.is_dir ? -1 : 1
     let diff = 0
-    if (key === "name") return collator.compare(a.name, b.name) * dir
+    if (key === "name") return collator.value.compare(a.name, b.name) * dir
     if (key === "size") diff = a.size - b.size
     else diff = Date.parse(a.modified) - Date.parse(b.modified)
-    return diff && !Number.isNaN(diff) ? Math.sign(diff) * dir : collator.compare(a.name, b.name)
+    return diff && !Number.isNaN(diff) ? Math.sign(diff) * dir : collator.value.compare(a.name, b.name)
   })
 })
 
@@ -45,17 +47,17 @@ const chunk = computed(() => {
   return Number.isFinite(size) && size >= 20 ? Math.min(size, 200) : 50
 })
 
-const sortItems = [
-  { value: "name", label: "名称" },
-  { value: "size", label: "大小" },
-  { value: "modified", label: "修改时间" },
-]
-const sortLabel = computed(() => sortItems.find((i) => i.value === prefs.sortKey)?.label ?? "名称")
+const sortItems = computed(() => [
+  { value: "name", label: t("browse.sort.name") },
+  { value: "size", label: t("browse.sort.size") },
+  { value: "modified", label: t("browse.sort.modified") },
+])
+const sortLabel = computed(() => sortItems.value.find((i) => i.value === prefs.sortKey)?.label ?? t("browse.sort.name"))
 
-const viewOptions = [
-  { value: "list", label: "列表" },
-  { value: "grid", label: "网格" },
-]
+const viewOptions = computed(() => [
+  { value: "list", label: t("browse.folder.viewList") },
+  { value: "grid", label: t("browse.folder.viewGrid") },
+])
 
 const handlers = { refresh: () => emit("refresh"), navigate: (p: string) => router.push(encodePath(p)) }
 
@@ -122,18 +124,18 @@ function onDrop(event: DragEvent) {
   event.preventDefault()
   dragDepth = 0
   dragging.value = false
-  if (!ctx.value.caps.upload) return notify("没有权限在此处上传文件", "danger")
+  if (!ctx.value.caps.upload) return notify(t("browse.folder.noUploadPermission"), "danger")
   const dir = props.path
   collectDropped(event.dataTransfer).then(
     (picked) => enqueueUploads(dir, picked),
-    () => notify("无法读取拖入的文件", "danger"),
+    () => notify(t("browse.folder.dropReadFailed"), "danger"),
   )
 }
 </script>
 
 <template>
   <section class="folder" @dragenter="onDrag" @dragover="onDrag" @dragleave="onDragLeave" @drop="onDrop">
-    <div v-if="dragging" class="dropzone" aria-hidden="true">拖放到此处上传到当前文件夹</div>
+    <div v-if="dragging" class="dropzone" aria-hidden="true">{{ t("browse.folder.dropHint") }}</div>
     <MarkdownView v-if="list.header" :source="list.header" class="panel panel--text" />
 
     <div class="toolbar">
@@ -142,18 +144,22 @@ function onDrop(event: DragEvent) {
           v-if="sorted.length"
           :model-value="allPicked"
           :indeterminate="picked.length > 0 && !allPicked"
-          :label="filtering ? `${filtered.length} / ${sorted.length} 项` : `${sorted.length} 项`"
-          aria-label="全选"
+          :label="
+            filtering
+              ? t('browse.folder.countFiltered', { shown: filtered.length, count: sorted.length }, sorted.length)
+              : t('browse.folder.count', { count: sorted.length }, sorted.length)
+          "
+          :aria-label="t('browse.folder.selectAll')"
           @update:model-value="(on: boolean) => (on ? selectAll(sorted.map((e) => e.name)) : clearSelection())"
         />
-        <template v-else>0 项</template>
+        <template v-else>{{ t("browse.folder.count", { count: 0 }, 0) }}</template>
       </span>
       <div class="toolbar__tools">
         <FolderFilter v-if="sorted.length" />
         <ActionBar :ctx="ctx" />
         <MenuButton
           :icon="icons.arrowSort"
-          label="排序方式"
+          :label="t('browse.folder.sortBy')"
           :text="sortLabel"
           :items="sortItems"
           :model-value="prefs.sortKey"
@@ -162,19 +168,19 @@ function onDrop(event: DragEvent) {
         <FluentButton
           tone="subtle"
           icon-only
-          :aria-label="prefs.sortOrder === 'asc' ? '升序，点击切换为降序' : '降序，点击切换为升序'"
-          :title="prefs.sortOrder === 'asc' ? '升序' : '降序'"
+          :aria-label="prefs.sortOrder === 'asc' ? t('browse.folder.toggleToDescending') : t('browse.folder.toggleToAscending')"
+          :title="prefs.sortOrder === 'asc' ? t('browse.folder.ascending') : t('browse.folder.descending')"
           @click="prefs.sortOrder = prefs.sortOrder === 'asc' ? 'desc' : 'asc'"
         >
           <FluentSvgIcon :svg="prefs.sortOrder === 'asc' ? icons.arrowUp : icons.arrowDown" :size="18" />
         </FluentButton>
         <FluentSegmented
-          label="视图"
+          :label="t('browse.folder.view')"
           :model-value="prefs.view"
           :options="viewOptions"
           @update:model-value="(v: string) => (prefs.view = v as ViewMode)"
         />
-        <FluentButton tone="subtle" icon-only aria-label="刷新" title="刷新" :busy="refreshing" @click="emit('refresh')">
+        <FluentButton tone="subtle" icon-only :aria-label="t('browse.folder.refresh')" :title="t('browse.folder.refresh')" :busy="refreshing" @click="emit('refresh')">
           <FluentSvgIcon v-if="!refreshing" :svg="icons.arrowClockwise" :size="18" />
         </FluentButton>
       </div>
@@ -190,8 +196,8 @@ function onDrop(event: DragEvent) {
         :writable="list.write"
         @refresh="emit('refresh')"
       />
-      <StateMessage v-else-if="filtering" :icon="icons.folderOpen" title="没有匹配的项目" detail="换个关键词，或清除筛选。" />
-      <StateMessage v-else :icon="icons.folderOpen" title="这个文件夹是空的" detail="这里还没有任何文件。" />
+      <StateMessage v-else-if="filtering" :icon="icons.folderOpen" :title="t('browse.folder.noMatches')" :detail="t('browse.folder.noMatchesDetail')" />
+      <StateMessage v-else :icon="icons.folderOpen" :title="t('browse.folder.empty')" :detail="t('browse.folder.emptyDetail')" />
     </div>
 
     <SelectionBar v-if="picked.length" :ctx="selectionCtx" @clear="clearSelection" />

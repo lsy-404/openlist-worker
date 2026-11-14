@@ -37,9 +37,25 @@ import folderArrowUp from "@fluentui/svg-icons/icons/folder_arrow_up_24_regular.
 import arrowMove from "@fluentui/svg-icons/icons/arrow_move_24_regular.svg?raw"
 import rename from "@fluentui/svg-icons/icons/rename_24_regular.svg?raw"
 import selectAllOn from "@fluentui/svg-icons/icons/select_all_on_24_regular.svg?raw"
+import localLanguage from "@fluentui/svg-icons/icons/local_language_24_regular.svg?raw"
+import navigation from "@fluentui/svg-icons/icons/navigation_24_regular.svg?raw"
+import settings from "@fluentui/svg-icons/icons/settings_24_regular.svg?raw"
+import arrowLeft from "@fluentui/svg-icons/icons/arrow_left_24_regular.svg?raw"
+import add from "@fluentui/svg-icons/icons/add_24_regular.svg?raw"
+import edit from "@fluentui/svg-icons/icons/edit_24_regular.svg?raw"
+import tag from "@fluentui/svg-icons/icons/tag_24_regular.svg?raw"
+import textBulletList from "@fluentui/svg-icons/icons/text_bullet_list_24_regular.svg?raw"
 import { extension } from "./format"
 
 export const icons = {
+  localLanguage,
+  navigation,
+  settings,
+  arrowLeft,
+  add,
+  edit,
+  tag,
+  textBulletList,
   arrowUpload,
   copy,
   deleteIcon,
@@ -99,7 +115,7 @@ const BY_EXTENSION: Record<string, string> = {
   reg: documentText,
 }
 
-// OpenList object types: 1 folder, 2 video, 3 audio, 4 text, 5 image
+// Object types: 1 folder, 2 video, 3 audio, 4 text, 5 image
 const BY_TYPE: Record<number, string> = { 1: folder, 2: video, 3: musicNote, 4: documentText, 5: image }
 
 export function iconForEntry(entry: { name: string; is_dir: boolean; type: number }): string {

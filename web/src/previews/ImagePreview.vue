@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n"
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { FluentButton, FluentSvgIcon } from "@platform-kit/fluent/vue"
 import PreviewNotice from "./PreviewNotice.vue"
@@ -9,6 +10,7 @@ import { isImage } from "./kinds"
 import type { PreviewProps } from "./registry"
 import { useSiblings } from "./useSiblings"
 
+const { t } = useI18n()
 const props = defineProps<PreviewProps>()
 
 const MAX_SCALE = 10
@@ -160,27 +162,27 @@ const cursor = computed(() => (scale.value > 1 ? (dragging.value ? "grabbing" : 
       <SiblingNav v-bind="nav" @prev="nav.prev" @next="nav.next" />
       <span class="spacer" />
       <span v-if="natural.w" class="hint">{{ natural.w }} × {{ natural.h }}</span>
-      <FluentButton tone="subtle" icon-only aria-label="缩小" :disabled="scale <= 1" @click="zoomTo(scale / 1.5)">
+      <FluentButton tone="subtle" icon-only :aria-label="t('preview.image.zoomOut')" :disabled="scale <= 1" @click="zoomTo(scale / 1.5)">
         <FluentSvgIcon :svg="previewIcons.zoomOut" :size="18" />
       </FluentButton>
       <span class="hint zoom">{{ Math.round(scale * 100) }}%</span>
-      <FluentButton tone="subtle" icon-only aria-label="放大" :disabled="scale >= MAX_SCALE" @click="zoomTo(scale * 1.5)">
+      <FluentButton tone="subtle" icon-only :aria-label="t('preview.image.zoomIn')" :disabled="scale >= MAX_SCALE" @click="zoomTo(scale * 1.5)">
         <FluentSvgIcon :svg="previewIcons.zoomIn" :size="18" />
       </FluentButton>
-      <FluentButton tone="subtle" icon-only aria-label="适应窗口" :disabled="scale === 1" @click="reset">
+      <FluentButton tone="subtle" icon-only :aria-label="t('preview.image.fit')" :disabled="scale === 1" @click="reset">
         <FluentSvgIcon :svg="previewIcons.arrowReset" :size="18" />
       </FluentButton>
       <FluentButton tone="subtle" @click="openOriginal">
         <FluentSvgIcon :svg="previewIcons.open" :size="18" />
-        查看原图
+        {{ t("preview.image.original") }}
       </FluentButton>
     </PreviewToolbar>
 
     <PreviewNotice
       v-if="status === 'error'"
       tone="error"
-      title="图片加载失败"
-      detail="文件可能已损坏，或浏览器不支持此图片格式。"
+      :title="t('preview.image.errorTitle')"
+      :detail="t('preview.image.errorDetail')"
       :download-url="downloadUrl"
       :filename="file.name"
     />
@@ -207,7 +209,7 @@ const cursor = computed(() => (scale.value > 1 ? (dragging.value ? "grabbing" : 
         @load="onLoad"
         @error="status = 'error'"
       />
-      <div v-if="status === 'loading'" class="stage__loading">加载中…</div>
+      <div v-if="status === 'loading'" class="stage__loading">{{ t("preview.image.loading") }}</div>
     </div>
   </div>
 </template>

@@ -1,3 +1,4 @@
+import { t } from "@/i18n"
 import type { ApiEnvelope } from "./types"
 
 const TOKEN_KEY = "token"
@@ -81,7 +82,7 @@ export async function request<T>(
     })
   } catch (err) {
     if (signal?.aborted) throw err
-    throw new ApiError("network", "无法连接到服务器", 0)
+    throw new ApiError("network", t("errors.network"), 0)
   }
 
   let envelope: ApiEnvelope<T> | null = null
@@ -91,11 +92,11 @@ export async function request<T>(
     /* non-JSON response */
   }
   // A non-JSON server error is a gateway or proxy failure, not an answer from the backend
-  if (!envelope && res.status >= 500) throw new ApiError("network", "无法连接到服务器", res.status)
+  if (!envelope && res.status >= 500) throw new ApiError("network", t("errors.network"), res.status)
   const code = envelope?.code ?? res.status
   if (code === 401 && token) unauthorizedHandler?.(token)
   if (!envelope || code !== 200) {
-    const message = envelope?.message || res.statusText || "请求失败"
+    const message = envelope?.message || res.statusText || t("errors.requestFailed")
     throw apiError(code, message)
   }
   return envelope.data

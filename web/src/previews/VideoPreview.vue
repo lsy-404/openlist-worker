@@ -1,10 +1,12 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n"
 import { ref, watch } from "vue"
 import { FluentProgressRing } from "@platform-kit/fluent/vue"
 import PreviewNotice from "./PreviewNotice.vue"
 import { proxyUrl } from "./download"
 import type { PreviewProps } from "./registry"
 
+const { t } = useI18n()
 const props = defineProps<PreviewProps>()
 const video = ref<HTMLVideoElement>()
 const status = ref<"loading" | "ready" | "error">("loading")
@@ -31,10 +33,10 @@ function onError() {
   const code = video.value?.error?.code
   detail.value =
     code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED
-      ? "当前浏览器无法播放此视频的封装或编码格式，可以下载后用本地播放器观看。"
+      ? t("preview.video.unsupported")
       : code === MediaError.MEDIA_ERR_NETWORK
-        ? "网络错误，视频未能加载。"
-        : "视频无法播放。"
+        ? t("preview.video.network")
+        : t("preview.video.generic")
   status.value = "error"
 }
 </script>
@@ -44,7 +46,7 @@ function onError() {
     <PreviewNotice
       v-if="status === 'error'"
       tone="error"
-      title="无法播放视频"
+      :title="t('preview.video.errorTitle')"
       :detail="detail"
       :download-url="downloadUrl"
       :filename="file.name"
@@ -62,7 +64,7 @@ function onError() {
         @error="onError"
       />
       <div v-if="status === 'loading'" class="video__loading">
-        <FluentProgressRing indeterminate :size="32" label="加载中" />
+        <FluentProgressRing indeterminate :size="32" :label="t('common.loading')" />
       </div>
     </div>
   </div>

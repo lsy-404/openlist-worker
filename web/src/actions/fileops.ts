@@ -1,4 +1,5 @@
 import { api } from "@/api"
+import { t } from "@/i18n"
 import { passwordFor } from "@/stores/passwords"
 import { askConfirm, askFolder, askText } from "@/stores/dialogs"
 import { clearSelection } from "@/stores/selection"
@@ -13,11 +14,11 @@ import type { ActionContext } from "./registry"
 const targets = (ctx: ActionContext) => (ctx.surface === "selection" ? ctx.selection : [ctx.entry])
 const describe = (ctx: ActionContext) => {
   const list = targets(ctx)
-  return list.length === 1 ? `“${list[0].name}”` : `${list.length} 项`
+  return list.length === 1 ? t("files.target.one", { name: list[0].name }) : t("files.target.many", { count: list.length })
 }
 
 function checkName(name: string): void {
-  if (name === "." || name === ".." || name.includes("/") || name.includes("\\")) throw new Error("名称不能是 . 或 ..，也不能包含 / 或 \\")
+  if (name === "." || name === ".." || name.includes("/") || name.includes("\\")) throw new Error(t("files.errors.invalidName"))
 }
 
 /** The backend overwrites silently, so name clashes are caught up front. */
@@ -25,7 +26,12 @@ async function assertFree(dir: string, names: string[]): Promise<void> {
   const list = await api.fsList(dir, passwordFor(dir)).catch(() => null)
   const taken = new Set((list?.content ?? []).map((e) => e.name))
   const clash = names.filter((n) => taken.has(n))
-  if (clash.length) throw new Error(`目标位置已存在同名项目：${clash.slice(0, 5).join("、")}${clash.length > 5 ? " 等" : ""}`)
+  if (clash.length) throw new Error(
+      t("files.errors.nameExists", {
+        names: clash.slice(0, 5).join(t("files.errors.nameSeparator")),
+        more: clash.length > 5 ? t("files.errors.nameMore") : "",
+      }),
+    )
 }
 
 function finish(ctx: ActionContext, changed: boolean, message: string): void {
@@ -52,7 +58,7 @@ const onEntries = (ctx: ActionContext) => ctx.surface !== "toolbar"
 
 registerAction({
   id: "upload",
-  label: "上传文件",
+  label: () => t("files.actions.upload"),
   icon: icons.arrowUpload,
   order: 31,
   primary: true,
@@ -65,7 +71,7 @@ registerAction({
 
 registerAction({
   id: "upload-folder",
-  label: "上传文件夹",
+  label: () => t("files.actions.uploadFolder"),
   icon: icons.folderArrowUp,
   order: 32,
   when: (ctx) => inFolderToolbar(ctx) && ctx.caps.upload,
@@ -77,39 +83,39 @@ registerAction({
 
 registerAction({
   id: "new-folder",
-  label: "新建文件夹",
+  label: () => t("files.actions.newFolder"),
   icon: icons.folderAdd,
   order: 30,
   when: (ctx) => inFolderToolbar(ctx) && ctx.caps.mkdir,
   async run(ctx) {
     const changed = await askText({
-      title: "新建文件夹",
-      label: "文件夹名称",
+      title: t("files.dialogs.newFolder.title"),
+      label: t("files.dialogs.newFolder.label"),
       value: "",
-      confirmLabel: "创建",
+      confirmLabel: t("files.dialogs.newFolder.confirm"),
       async run(name) {
         checkName(name)
         await assertFree(ctx.dir, [name])
         await api.fsMkdir(joinPath(ctx.dir, name))
       },
     })
-    finish(ctx, changed, "文件夹已创建")
+    finish(ctx, changed, t("files.notices.folderCreated"))
   },
 })
 
 registerAction({
   id: "rename",
-  label: "重命名",
+  label: () => t("files.actions.rename"),
   icon: icons.rename,
   order: 40,
   when: (ctx) => ctx.surface === "context" && ctx.caps.rename,
   async run(ctx) {
     const changed = await askText({
-      title: "重命名",
-      label: "新名称",
+      title: t("files.dialogs.rename.title"),
+      label: t("files.dialogs.rename.label"),
       value: ctx.entry.name,
       selectStem: !ctx.entry.is_dir,
-      confirmLabel: "重命名",
+      confirmLabel: t("files.dialogs.rename.confirm"),
       async run(name) {
         checkName(name)
         if (name === ctx.entry.name) return
@@ -117,14 +123,14 @@ registerAction({
         await api.fsRename(ctx.path, name)
       },
     })
-    finish(ctx, changed, "已重命名")
+    finish(ctx, changed, t("files.notices.renamed"))
   },
 })
 
-function transfer(id: "move" | "copy", label: string, past: string, icon: string, order: number) {
+function transfer(id: "move" | "copy", icon: string, order: number) {
   registerAction({
     id,
-    label: (ctx) => (ctx.surface === "selection" ? label : `${label}到…`),
+    label: (ctx) => t(ctx.surface === "selection" ? `files.actions.${id}.label` : `files.actions.${id}.labelTo`),
     icon,
     order,
     when: (ctx) => onEntries(ctx) && ctx.caps[id],
@@ -133,12 +139,12 @@ function transfer(id: "move" | "copy", label: string, past: string, icon: string
       const names = list.map((e) => e.name)
       const folders = list.filter((e) => e.is_dir).map((e) => joinPath(ctx.dir, e.name))
       const changed = await askFolder({
-        title: `${label} ${describe(ctx)} 到`,
+        title: t(`files.actions.${id}.title`, { target: describe(ctx) }),
         start: ctx.dir,
-        confirmLabel: `${label}到此处`,
+        confirmLabel: t(`files.actions.${id}.confirm`),
         blocked(path) {
-          if (path === ctx.dir) return "目标不能是当前文件夹"
-          if (folders.some((f) => path === f || path.startsWith(f + "/"))) return "不能选择被操作的文件夹或其子文件夹"
+          if (path === ctx.dir) return t("files.picker.sameFolder")
+          if (folders.some((f) => path === f || path.startsWith(f + "/"))) return t("files.picker.insideSelf")
           return null
         },
         async run(dst) {
@@ -146,38 +152,41 @@ function transfer(id: "move" | "copy", label: string, past: string, icon: string
           await (id === "move" ? api.fsMove : api.fsCopy)(ctx.dir, dst, names)
         },
       })
-      finish(ctx, changed, `已${past} ${describe(ctx)}`)
+      finish(ctx, changed, t(`files.actions.${id}.done`, { target: describe(ctx) }))
     },
   })
 }
-transfer("move", "移动", "移动", icons.arrowMove, 50)
-transfer("copy", "复制", "复制", icons.copy, 60)
+transfer("move", icons.arrowMove, 50)
+transfer("copy", icons.copy, 60)
 
 registerAction({
   id: "delete",
-  label: "删除",
+  label: () => t("files.actions.delete"),
   icon: icons.deleteIcon,
   order: 90,
   when: (ctx) => onEntries(ctx) && ctx.caps.remove,
   async run(ctx) {
     const list = targets(ctx)
     const changed = await askConfirm({
-      title: "删除",
-      message: `确定删除 ${describe(ctx)}吗？此操作无法撤销。`,
-      detail: list.length > 1 ? list.slice(0, 10).map((e) => e.name).concat(list.length > 10 ? [`…共 ${list.length} 项`] : []) : [],
-      confirmLabel: "删除",
+      title: t("files.dialogs.delete.title"),
+      message: t("files.dialogs.delete.message", { target: describe(ctx) }),
+      detail:
+        list.length > 1
+          ? list.slice(0, 10).map((e) => e.name).concat(list.length > 10 ? [t("files.dialogs.delete.more", { count: list.length })] : [])
+          : [],
+      confirmLabel: t("files.dialogs.delete.confirm"),
       danger: true,
       async run() {
         await api.fsRemove(ctx.dir, list.map((e) => e.name))
       },
     })
-    finish(ctx, changed, `已删除 ${describe(ctx)}`)
+    finish(ctx, changed, t("files.notices.deleted", { target: describe(ctx) }))
   },
 })
 
 registerAction({
   id: "download-each",
-  label: "逐个下载",
+  label: () => t("files.actions.downloadEach"),
   icon: icons.arrowDownload,
   order: 10,
   when: (ctx) => ctx.surface === "selection" && ctx.selection.some((e) => !e.is_dir),
@@ -195,6 +204,6 @@ registerAction({
       // Browsers drop downloads fired in the same tick
       await new Promise((resolve) => setTimeout(resolve, 350))
     }
-    if (skipped) ctx.notify(`已跳过 ${skipped} 个文件夹`, "info")
+    if (skipped) ctx.notify(t("files.notices.skippedFolders", { count: skipped }), "info")
   },
 })

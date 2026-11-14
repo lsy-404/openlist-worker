@@ -1,9 +1,11 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n"
 import { FluentButton, FluentProgressRing, FluentSvgIcon } from "@platform-kit/fluent/vue"
 import { icons } from "@/utils/icons"
 import { previewIcons } from "./icons"
 import { startDownload } from "./download"
 
+const { t } = useI18n()
 defineProps<{
   tone: "loading" | "error" | "info"
   title: string
@@ -15,7 +17,7 @@ defineProps<{
 
 <template>
   <div class="notice" :role="tone === 'error' ? 'alert' : 'status'">
-    <FluentProgressRing v-if="tone === 'loading'" indeterminate :size="32" label="加载中" />
+    <FluentProgressRing v-if="tone === 'loading'" indeterminate :size="32" :label="t('common.loading')" />
     <FluentSvgIcon v-else :svg="tone === 'error' ? icons.warning : icons.document" :size="40" />
     <p class="notice__title">{{ title }}</p>
     <p v-if="detail" class="notice__detail">{{ detail }}</p>
@@ -23,7 +25,7 @@ defineProps<{
       <slot />
       <FluentButton v-if="downloadUrl" @click="startDownload(downloadUrl, filename ?? '')">
         <FluentSvgIcon :svg="previewIcons.arrowDownload" :size="18" />
-        下载文件
+        {{ t("preview.notice.download") }}
       </FluentButton>
     </div>
   </div>

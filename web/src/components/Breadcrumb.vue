@@ -1,10 +1,12 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n"
 import { computed } from "vue"
 import { RouterLink } from "vue-router"
 import { FluentSvgIcon } from "@platform-kit/fluent/vue"
 import { icons } from "@/utils/icons"
 import { encodePath, splitPath } from "@/utils/path"
 
+const { t } = useI18n()
 const props = defineProps<{ path: string }>()
 
 const crumbs = computed(() => {
@@ -14,10 +16,10 @@ const crumbs = computed(() => {
 </script>
 
 <template>
-  <nav class="crumbs" aria-label="路径">
+  <nav class="crumbs" :aria-label="t('browse.breadcrumb.label')">
     <ol>
       <li>
-        <RouterLink to="/" class="crumb crumb--home" title="根目录" aria-label="根目录">
+        <RouterLink to="/" class="crumb crumb--home" :title="t('browse.breadcrumb.root')" :aria-label="t('browse.breadcrumb.root')">
           <FluentSvgIcon :svg="icons.home" :size="18" />
         </RouterLink>
       </li>
