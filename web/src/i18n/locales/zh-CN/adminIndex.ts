@@ -1,0 +1,18 @@
+export default {
+  title: "搜索索引",
+  description: "为文件搜索建立索引。构建会遍历全部存储，大型存储可能需要较长时间。",
+  status: "索引状态",
+  state: "状态",
+  idle: "空闲",
+  running: "构建中",
+  failed: "上次构建失败",
+  objects: "已索引对象",
+  lastDone: "上次完成",
+  never: "从未",
+  paths: "更新路径",
+  pathsHelp: "每行一个路径，仅用于“更新索引”，留空表示根目录。",
+  actions: { build: "重建索引", update: "更新索引", stop: "停止", clear: "清空" },
+  done: { build: "索引已重建", update: "索引已更新", stop: "已停止", clear: "索引已清空" },
+  clear: { title: "清空索引", message: "清空后搜索将不再使用已有索引，需要重新构建。确定继续吗？", confirm: "清空" },
+  stop: { title: "停止构建", message: "确定要停止当前的索引任务吗？", confirm: "停止" },
+}

@@ -1,0 +1,16 @@
+export default {
+  title: "概览",
+  description: "存储、用户和搜索索引的运行状况一览。",
+  unavailable: "无法获取",
+  storages: "存储",
+  storageDetail: "{working} 正常，{failing} 异常，{disabled} 已停用",
+  users: "用户",
+  userDetail: "{disabled} 个已停用",
+  metas: "元信息",
+  metaDetail: "路径规则数量",
+  index: "搜索索引",
+  indexReady: "对象数，已就绪",
+  indexRunning: "对象数，构建中",
+  indexError: "对象数，上次构建出错",
+  version: "后端版本 {version}",
+}
