@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from "vue-i18n"
 import { computed } from "vue"
+import { RouterLink, useRoute } from "vue-router"
 import { FluentButton, FluentProgressBar, FluentSvgIcon } from "@platform-kit/fluent/vue"
 import {
   cancelAll,
@@ -16,6 +17,7 @@ import { formatSize } from "@/utils/format"
 import { icons } from "@/utils/icons"
 
 const { t } = useI18n()
+const route = useRoute()
 const total = computed(() => uploads.items.length)
 const finished = computed(() => uploads.items.filter((i) => i.status === "done").length)
 const failed = computed(() => uploads.items.filter((i) => i.status === "failed").length)
@@ -38,7 +40,7 @@ function detail(item: UploadItem): string {
 </script>
 
 <template>
-  <section v-if="total" class="uploads" :aria-label="t('files.uploads.queue')">
+  <section v-if="total && route.path !== '/@tasks'" class="uploads" :aria-label="t('files.uploads.queue')">
     <header class="uploads__head">
       <button
         type="button"
@@ -51,6 +53,7 @@ function detail(item: UploadItem): string {
         <span class="uploads__summary" aria-live="polite">{{ summary }}</span>
         <FluentSvgIcon :svg="uploads.expanded ? icons.arrowDown : icons.arrowUp" :size="14" />
       </button>
+      <RouterLink to="/@tasks" class="uploads__all">{{ t("tasks.panel.viewAll") }}</RouterLink>
       <FluentButton v-if="busy" tone="subtle" @click="cancelAll">{{ t("files.uploads.cancelAll") }}</FluentButton>
       <FluentButton v-else tone="subtle" icon-only :aria-label="t('files.uploads.clearFinished')" :title="t('files.uploads.clearFinished')" @click="clearFinished">
         <FluentSvgIcon :svg="icons.dismiss" :size="18" />
@@ -135,6 +138,12 @@ function detail(item: UploadItem): string {
 .uploads__toggle:focus-visible {
   outline: 2px solid var(--fluent-focus-outer);
   outline-offset: -2px;
+}
+.uploads__all {
+  flex: none;
+  padding: 0 4px;
+  white-space: nowrap;
+  font-size: 0.85rem;
 }
 .uploads__summary {
   flex: 1;

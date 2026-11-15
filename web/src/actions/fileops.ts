@@ -4,6 +4,7 @@ import { passwordFor } from "@/stores/passwords"
 import { askConfirm, askFolder, askText } from "@/stores/dialogs"
 import { clearSelection } from "@/stores/selection"
 import { enqueueUploads } from "@/stores/uploads"
+import { runOp } from "@/tasks/store"
 import { collectInput } from "@/utils/dropped"
 import { icons } from "@/utils/icons"
 import { entryDownloadUrl } from "@/utils/links"
@@ -96,7 +97,7 @@ registerAction({
       async run(name) {
         checkName(name)
         await assertFree(ctx.dir, [name])
-        await api.fsMkdir(joinPath(ctx.dir, name))
+        await runOp({ kind: "mkdir", dir: ctx.dir, names: [name] })
       },
     })
     finish(ctx, changed, t("files.notices.folderCreated"))
@@ -120,7 +121,7 @@ registerAction({
         checkName(name)
         if (name === ctx.entry.name) return
         await assertFree(ctx.dir, [name])
-        await api.fsRename(ctx.path, name)
+        await runOp({ kind: "rename", dir: ctx.dir, names: [ctx.entry.name], newName: name })
       },
     })
     finish(ctx, changed, t("files.notices.renamed"))
@@ -149,7 +150,7 @@ function transfer(id: "move" | "copy", icon: string, order: number) {
         },
         async run(dst) {
           await assertFree(dst, names)
-          await (id === "move" ? api.fsMove : api.fsCopy)(ctx.dir, dst, names)
+          await runOp({ kind: id, dir: ctx.dir, dst, names })
         },
       })
       finish(ctx, changed, t(`files.actions.${id}.done`, { target: describe(ctx) }))
@@ -177,7 +178,7 @@ registerAction({
       confirmLabel: t("files.dialogs.delete.confirm"),
       danger: true,
       async run() {
-        await api.fsRemove(ctx.dir, list.map((e) => e.name))
+        await runOp({ kind: "delete", dir: ctx.dir, names: list.map((e) => e.name) })
       },
     })
     finish(ctx, changed, t("files.notices.deleted", { target: describe(ctx) }))
