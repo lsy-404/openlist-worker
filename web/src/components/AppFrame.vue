@@ -102,6 +102,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey))
   .frame__pane {
     position: fixed;
     inset: 56px auto 0 0;
+    align-self: stretch;
     z-index: 9;
     width: min(300px, 85vw);
     height: auto;
