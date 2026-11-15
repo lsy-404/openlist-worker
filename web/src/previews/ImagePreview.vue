@@ -298,7 +298,7 @@ const cursor = computed(() => (scale.value > 1 ? (dragging.value ? "grabbing" : 
   pointer-events: none;
 }
 .stage__img--animate {
-  transition: transform var(--fluent-fast, 0.1s) ease-out;
+  transition: transform var(--fluent-fast) var(--fluent-ease);
 }
 .stage__loading {
   position: absolute;

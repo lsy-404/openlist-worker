@@ -251,6 +251,7 @@ function close() {
   border-radius: var(--fluent-radius);
   color: var(--fluent-text);
   text-decoration: none;
+  transition: var(--motion-fill);
 }
 .hit:hover {
   background: var(--fluent-control-hover);

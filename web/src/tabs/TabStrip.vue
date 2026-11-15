@@ -48,6 +48,7 @@ function onKey(event: KeyboardEvent, id: string) {
 <template>
   <div class="strip">
     <div ref="scroller" class="strip__scroll" role="tablist" :aria-label="t('tabs.label')" @wheel.passive="onWheel">
+      <TransitionGroup name="tab">
       <div
         v-for="item in items"
         :key="item.id"
@@ -68,6 +69,7 @@ function onKey(event: KeyboardEvent, id: string) {
           <FluentSvgIcon :svg="icons.dismiss" :size="12" />
         </button>
       </div>
+      </TransitionGroup>
     </div>
     <FluentButton class="strip__add" tone="subtle" icon-only :aria-label="t('tabs.new')" :title="t('tabs.new')" @click="openTab('/')">
       <FluentSvgIcon :svg="icons.add" :size="16" />
@@ -112,6 +114,11 @@ function onKey(event: KeyboardEvent, id: string) {
   color: var(--fluent-muted);
   cursor: default;
   user-select: none;
+  transition:
+    var(--motion-fill),
+    width var(--fluent-fast) var(--motion-ease-move),
+    flex-basis var(--fluent-fast) var(--motion-ease-move),
+    min-width var(--fluent-fast) var(--motion-ease-move);
 }
 .tab:hover {
   background: var(--fluent-control-hover);
@@ -151,6 +158,7 @@ function onKey(event: KeyboardEvent, id: string) {
   background: none;
   color: inherit;
   cursor: pointer;
+  transition: var(--motion-fill);
 }
 .tab__close:hover {
   background: var(--fluent-control-hover);
@@ -161,6 +169,35 @@ function onKey(event: KeyboardEvent, id: string) {
   min-width: 28px;
   height: 28px;
   padding: 0;
+}
+.tab-enter-active,
+.tab-leave-active {
+  overflow: hidden;
+}
+.tab-enter-active {
+  transition:
+    var(--motion-fill),
+    width var(--fluent-normal) var(--fluent-ease),
+    flex-basis var(--fluent-normal) var(--fluent-ease),
+    min-width var(--fluent-normal) var(--fluent-ease),
+    padding var(--fluent-normal) var(--fluent-ease),
+    opacity var(--fluent-normal) var(--fluent-ease);
+}
+.tab-leave-active {
+  transition:
+    width var(--fluent-fast) var(--fluent-ease-accelerate),
+    flex-basis var(--fluent-fast) var(--fluent-ease-accelerate),
+    min-width var(--fluent-fast) var(--fluent-ease-accelerate),
+    padding var(--fluent-fast) var(--fluent-ease-accelerate),
+    opacity var(--fluent-fast) var(--fluent-ease-accelerate);
+}
+.tab.tab-enter-from,
+.tab.tab-leave-to {
+  width: 0;
+  flex-basis: 0;
+  min-width: 0;
+  padding-inline: 0;
+  opacity: 0;
 }
 @media (max-width: 640px) {
   .strip {

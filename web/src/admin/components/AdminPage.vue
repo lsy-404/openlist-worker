@@ -26,6 +26,7 @@ const heading = computed(() => props.title ?? (route.meta.title ? t(route.meta.t
   box-sizing: border-box;
   max-width: 1000px;
   padding: 24px 32px 32px;
+  animation: motion-rise var(--fluent-normal) var(--fluent-ease) backwards;
 }
 .page__title {
   margin: 0;

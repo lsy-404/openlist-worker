@@ -11,7 +11,9 @@ import { joinPath, parentPath, splitPath } from "@/utils/path"
 type Operation = Extract<DialogRequest, { run: unknown }>
 
 const { t, locale } = useI18n()
-const dialog = computed(() => activeDialog.value)
+// The last request stays rendered while the dialog fades out
+let last: DialogRequest | null = null
+const dialog = computed(() => (last = activeDialog.value ?? last))
 const operation = computed(() => (dialog.value && dialog.value.kind !== "conflict" ? (dialog.value as Operation) : null))
 const heading = computed(() => (dialog.value?.kind === "conflict" ? t("files.conflict.title") : (operation.value?.title ?? "")))
 
@@ -119,7 +121,7 @@ const shownConflicts = computed(() => (dialog.value?.kind === "conflict" ? dialo
 </script>
 
 <template>
-  <FluentDialog :open="!!dialog" :label="heading || t('files.dialogs.fallbackLabel')" @close="cancel">
+  <FluentDialog :open="!!activeDialog" :label="heading || t('files.dialogs.fallbackLabel')" @close="cancel">
     <template #title>
       <h2 class="title">{{ heading }}</h2>
     </template>
@@ -248,6 +250,7 @@ const shownConflicts = computed(() => (dialog.value?.kind === "conflict" ? dialo
   padding: 4px 6px;
   border-radius: var(--fluent-radius);
   cursor: pointer;
+  transition: var(--motion-fill);
 }
 .crumbs__item:hover {
   background: var(--fluent-control-hover);
@@ -292,6 +295,7 @@ const shownConflicts = computed(() => (dialog.value?.kind === "conflict" ? dialo
   text-align: start;
   cursor: pointer;
   border-radius: var(--fluent-radius);
+  transition: var(--motion-fill);
 }
 .dirs__item:hover {
   background: var(--fluent-control-hover);

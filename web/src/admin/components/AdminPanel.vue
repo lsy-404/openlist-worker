@@ -15,16 +15,24 @@ const emit = defineEmits<{ "update:open": [value: boolean]; submit: [] }>()
 
 const { t } = useI18n()
 const dialog = ref<HTMLDialogElement | null>(null)
+// The form stays mounted until the slide-out has finished
+const shown = ref(props.open)
 
 // A native modal dialog supplies the focus trap, Escape handling and top layer
 watch(
   () => props.open,
   async (open) => {
+    if (open) shown.value = true
     await nextTick()
     const el = dialog.value
     if (!el) return
-    if (open && !el.open) el.showModal()
-    else if (!open && el.open) el.close()
+    if (open) {
+      if (!el.open) el.showModal()
+      return
+    }
+    if (el.open) el.close()
+    await Promise.allSettled(el.getAnimations().map((animation) => animation.finished))
+    if (!props.open) shown.value = false
   },
   { immediate: true },
 )
@@ -40,7 +48,7 @@ function onCancel(event: Event) {
 
 <template>
   <dialog ref="dialog" class="panel" :aria-label="title" @close="emit('update:open', false)" @cancel="onCancel" @click="onBackdrop">
-    <form v-if="open" class="panel__form" @submit.prevent="emit('submit')">
+    <form v-if="shown" class="panel__form" @submit.prevent="emit('submit')">
       <header class="panel__head">
         <h2 class="panel__title">{{ title }}</h2>
         <FluentButton tone="subtle" icon-only type="button" :aria-label="t('common.close')" :disabled="busy" @click="emit('update:open', false)">
@@ -73,9 +81,43 @@ function onCancel(event: Event) {
   background: var(--fluent-surface);
   color: var(--fluent-text);
   box-shadow: var(--fluent-shadow);
+  transform: translateX(100%);
+  pointer-events: none;
+  transition:
+    transform var(--fluent-fast) var(--fluent-ease-accelerate),
+    overlay var(--fluent-fast) allow-discrete,
+    display var(--fluent-fast) allow-discrete;
+}
+.panel[open] {
+  transform: none;
+  pointer-events: auto;
+  transition:
+    transform var(--fluent-normal) var(--fluent-ease),
+    overlay var(--fluent-normal) allow-discrete,
+    display var(--fluent-normal) allow-discrete;
 }
 .panel::backdrop {
   background: rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  transition:
+    opacity var(--fluent-fast) var(--fluent-ease-accelerate),
+    overlay var(--fluent-fast) allow-discrete,
+    display var(--fluent-fast) allow-discrete;
+}
+.panel[open]::backdrop {
+  opacity: 1;
+  transition:
+    opacity var(--fluent-normal) var(--fluent-ease),
+    overlay var(--fluent-normal) allow-discrete,
+    display var(--fluent-normal) allow-discrete;
+}
+@starting-style {
+  .panel[open] {
+    transform: translateX(100%);
+  }
+  .panel[open]::backdrop {
+    opacity: 0;
+  }
 }
 .panel__form {
   display: flex;

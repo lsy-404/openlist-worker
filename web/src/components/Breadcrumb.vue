@@ -179,6 +179,7 @@ li {
   color: var(--fluent-text);
   font: inherit;
   text-decoration: none;
+  transition: var(--motion-fill);
 }
 a.crumb:hover,
 .crumb--button:hover {

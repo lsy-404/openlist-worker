@@ -5,9 +5,11 @@ import { toasts } from "@/stores/toast"
 
 <template>
   <div class="toasts" aria-live="polite">
-    <FluentNotice v-for="t in toasts" :key="t.id" :tone="t.tone === 'danger' ? 'danger' : t.tone === 'success' ? 'success' : 'info'">
-      {{ t.text }}
-    </FluentNotice>
+    <TransitionGroup name="toast">
+      <FluentNotice v-for="t in toasts" :key="t.id" :tone="t.tone === 'danger' ? 'danger' : t.tone === 'success' ? 'success' : 'info'">
+        {{ t.text }}
+      </FluentNotice>
+    </TransitionGroup>
   </div>
 </template>
 
@@ -27,5 +29,26 @@ import { toasts } from "@/stores/toast"
   pointer-events: auto;
   box-shadow: var(--fluent-shadow);
   background: var(--fluent-surface);
+}
+.toast-enter-active {
+  transition:
+    opacity var(--fluent-normal) var(--fluent-ease),
+    transform var(--fluent-normal) var(--fluent-ease);
+}
+.toast-leave-active {
+  transition:
+    opacity var(--fluent-fast) var(--fluent-ease-accelerate),
+    transform var(--fluent-fast) var(--fluent-ease-accelerate);
+}
+.toast-move {
+  transition: transform var(--fluent-normal) var(--motion-ease-move);
+}
+.toast-enter-from {
+  opacity: 0;
+  transform: translateY(var(--motion-rise));
+}
+.toast-leave-to {
+  opacity: 0;
+  transform: translateY(calc(var(--motion-rise) / 2));
 }
 </style>

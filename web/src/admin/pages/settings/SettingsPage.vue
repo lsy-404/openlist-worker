@@ -129,6 +129,7 @@ const sectionDescription = (s: SettingsSectionDef) => (s.labelKey === "unknown" 
   color: inherit;
   font: inherit;
   cursor: pointer;
+  transition: var(--motion-fill), border-color var(--fluent-fast) var(--fluent-ease);
 }
 .settings__tab:hover {
   background: rgb(128 128 128 / 0.12);
