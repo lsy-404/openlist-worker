@@ -6,8 +6,10 @@ import { FluentButton, FluentCheckbox, FluentMenu, FluentSvgIcon } from "@platfo
 import { actionLabel, actionsFor, type ActionContext } from "@/actions"
 import { createActionContext } from "@/actions/context"
 import type { FsEntry } from "@/api"
+import { isCut } from "@/browse/clipboard"
+import { entryTypeLabel } from "@/browse/entryType"
 import { prefs, toggleSort, type SortKey } from "@/stores/prefs"
-import { selection, toggleSelection } from "@/stores/selection"
+import { clearSelection, selectAll, selection, toggleSelection } from "@/stores/selection"
 import { formatDate, formatSize } from "@/utils/format"
 import { iconForEntry, icons } from "@/utils/icons"
 import { entryDownloadUrl } from "@/utils/links"
@@ -101,11 +103,9 @@ function onContextMenu(event: MouseEvent, entry: FsEntry) {
 }
 
 const { t } = useI18n()
-const sortLabels = computed<Record<SortKey, string>>(() => ({
-  name: t("browse.sort.name"),
-  size: t("browse.sort.size"),
-  modified: t("browse.sort.modified"),
-}))
+const columns: SortKey[] = ["name", "modified", "type", "size"]
+const allPicked = computed(() => names.value.length > 0 && names.value.every((n) => selection.names.has(n)))
+const somePicked = computed(() => !allPicked.value && names.value.some((n) => selection.names.has(n)))
 function ariaSort(key: SortKey) {
   return prefs.sortKey === key ? (prefs.sortOrder === "asc" ? "ascending" : "descending") : "none"
 }
@@ -114,15 +114,23 @@ function ariaSort(key: SortKey) {
 <template>
   <div class="entries" :data-view="prefs.view" :class="{ 'entries--selectable': selectable, 'entries--selecting': selecting }">
     <div v-if="prefs.view === 'list'" class="head" role="row">
+      <span v-if="selectable" class="head__check">
+        <FluentCheckbox
+          :model-value="allPicked"
+          :indeterminate="somePicked"
+          :aria-label="t('explorer.command.selectAll')"
+          @update:model-value="(on: boolean) => (on ? selectAll(names) : clearSelection())"
+        />
+      </span>
       <button
-        v-for="key in (['name', 'size', 'modified'] as SortKey[])"
+        v-for="key in columns"
         :key="key"
         class="head__cell"
         :class="`head__cell--${key}`"
         :aria-sort="ariaSort(key)"
         @click="toggleSort(key)"
       >
-        {{ sortLabels[key] }}
+        {{ t(`explorer.columns.${key}`) }}
         <FluentSvgIcon
           v-if="prefs.sortKey === key"
           :svg="prefs.sortOrder === 'asc' ? icons.arrowUp : icons.arrowDown"
@@ -137,7 +145,7 @@ function ariaSort(key: SortKey) {
         v-for="entry in shown"
         :key="entry.name"
         class="entry"
-        :class="{ 'entry--selected': selection.names.has(entry.name) }"
+        :class="{ 'entry--selected': selection.names.has(entry.name), 'entry--cut': isCut(path, entry.name) }"
         @contextmenu="onContextMenu($event, entry)"
       >
         <span
@@ -158,8 +166,9 @@ function ariaSort(key: SortKey) {
             <FluentSvgIcon v-else :svg="iconForEntry(entry)" :size="prefs.view === 'grid' ? 40 : 22" />
           </span>
           <span class="entry__name">{{ entry.name }}</span>
-          <span class="entry__size">{{ entry.is_dir && !entry.size ? "—" : formatSize(entry.size) }}</span>
           <span class="entry__time">{{ formatDate(entry.modified) }}</span>
+          <span class="entry__type">{{ entryTypeLabel(entry) }}</span>
+          <span class="entry__size">{{ entry.is_dir && !entry.size ? "" : formatSize(entry.size) }}</span>
           <span class="entry__meta">{{ entry.is_dir && !entry.size ? "" : formatSize(entry.size) + " · " }}{{ formatDate(entry.modified) }}</span>
         </RouterLink>
         <FluentButton
@@ -191,9 +200,10 @@ function ariaSort(key: SortKey) {
 
 <style scoped>
 .entries {
-  --cols: minmax(0, 1fr) 96px 160px 40px;
+  --cols: minmax(0, 1fr) 150px 130px 84px 40px;
 }
 .head {
+  position: relative;
   display: grid;
   grid-template-columns: var(--cols);
   align-items: center;
@@ -275,11 +285,30 @@ function ariaSort(key: SortKey) {
   pointer-events: none;
 }
 .entry__size,
-.entry__time {
+.entry__time,
+.entry__type {
   color: var(--fluent-muted);
   font-size: 0.9rem;
   padding: 0 8px;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.entry__size {
+  text-align: end;
+}
+.head__cell--size {
+  justify-content: flex-end;
+}
+.head__check {
+  position: absolute;
+  inset-inline-start: 12px;
+  display: flex;
+  align-items: center;
+  height: 36px;
+}
+.entry--cut .entry__link {
+  opacity: 0.5;
 }
 .entry__meta {
   display: none;
@@ -364,8 +393,10 @@ function ariaSort(key: SortKey) {
 [data-view="grid"] .entry__size {
   padding: 0;
   font-size: 0.8rem;
+  text-align: center;
 }
-[data-view="grid"] .entry__time {
+[data-view="grid"] .entry__time,
+[data-view="grid"] .entry__type {
   display: none;
 }
 [data-view="grid"] .entry__more {
@@ -413,11 +444,13 @@ function ariaSort(key: SortKey) {
     --cols: minmax(0, 1fr) 40px;
   }
   .head__cell--size,
-  .head__cell--modified {
+  .head__cell--modified,
+  .head__cell--type {
     display: none;
   }
   [data-view="list"] .entry__size,
-  [data-view="list"] .entry__time {
+  [data-view="list"] .entry__time,
+  [data-view="list"] .entry__type {
     display: none;
   }
   [data-view="list"] .entry {

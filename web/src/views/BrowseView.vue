@@ -3,7 +3,11 @@ import { useI18n } from "vue-i18n"
 import { computed, ref, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 import { FluentButton, FluentProgressBar } from "@platform-kit/fluent/vue"
-import Breadcrumb from "@/components/Breadcrumb.vue"
+import BrowseToolbar from "@/browse/BrowseToolbar.vue"
+import StatusBar from "@/browse/StatusBar.vue"
+import { useCommands } from "@/browse/commands"
+import { syncFolder } from "@/browse/tree"
+import { useShortcuts } from "@/browse/useShortcuts"
 import PasswordDialog from "@/components/PasswordDialog.vue"
 import StateMessage from "@/components/StateMessage.vue"
 import { siteTitle } from "@/stores/session"
@@ -38,13 +42,28 @@ watch(
 )
 
 function up() {
-  router.push(encodePath(parentPath(path.value)))
+  if (path.value !== "/") router.push(encodePath(parentPath(path.value)))
 }
+
+const list = computed(() => (resource.value?.kind === "folder" ? resource.value.list : null))
+// Commands follow the listing on screen, which lags the route while the next folder loads
+const listPath = computed(() => resource.value?.path ?? path.value)
+const { commands, entries } = useCommands(listPath, list, reload)
+useShortcuts({ commands: () => (list.value ? commands.value : null), up, reload })
+
+watch(resource, (value) => {
+  if (value?.kind === "folder") syncFolder(value.path, value.list.content ?? [])
+})
 </script>
 
 <template>
   <main class="page">
-    <Breadcrumb :path="path" />
+    <Teleport to="#frame-toolbar" defer>
+      <BrowseToolbar :path="path" :commands="list ? commands : null" :filterable="entries.length > 0" :loading="loading" @up="up" @refresh="reload()" />
+    </Teleport>
+    <Teleport to="#frame-status" defer>
+      <StatusBar v-if="list" :entries="entries" />
+    </Teleport>
 
     <div class="content" :aria-busy="loading">
       <FluentProgressBar v-if="loading" class="content__bar" indeterminate :label="t('common.loading')" />
@@ -82,7 +101,6 @@ function up() {
             v-if="resource.kind === 'folder'"
             :path="resource.path"
             :list="resource.list"
-            :refreshing="loading"
             @refresh="reload"
           />
           <FileView v-else :path="resource.path" :file="resource.file" @refresh="reload" />
@@ -107,14 +125,12 @@ function up() {
   flex-direction: column;
   gap: 8px;
   width: 100%;
-  max-width: 1120px;
-  margin: 0 auto;
-  padding: 12px max(16px, env(safe-area-inset-right)) 48px max(16px, env(safe-area-inset-left));
+  padding: 8px;
   box-sizing: border-box;
 }
 .content {
   position: relative;
-  min-height: 60vh;
+  min-height: 50vh;
 }
 .content__bar {
   position: absolute;
@@ -131,7 +147,7 @@ function up() {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 44px 0 0;
+  padding: 12px 0 0;
 }
 .skeleton__row {
   height: 44px;
