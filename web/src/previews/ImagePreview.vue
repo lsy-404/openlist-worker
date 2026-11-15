@@ -6,8 +6,11 @@ import PreviewNotice from "./PreviewNotice.vue"
 import PreviewToolbar from "./PreviewToolbar.vue"
 import SiblingNav from "./SiblingNav.vue"
 import { previewIcons } from "./icons"
+import { fetchBuffer } from "./fetch"
+import { decodeHeif, HEIF_EXTENSIONS } from "./heif"
 import { isImage } from "./kinds"
 import type { PreviewProps } from "./registry"
+import { extension } from "@/utils/format"
 import { useSiblings } from "./useSiblings"
 
 const { t } = useI18n()
@@ -22,13 +25,23 @@ const scale = ref(1)
 const tx = ref(0)
 const ty = ref(0)
 const dragging = ref(false)
+const rotation = ref(0)
+const box = ref({ w: 0, h: 0 })
+let observer: ResizeObserver | null = null
+const src = ref(props.downloadUrl)
+let decodedUrl = ""
+let triedDecode = false
 
 const nav = useSiblings(() => ({ path: props.path, related: props.file.related }), isImage)
 
 watch(
   () => props.downloadUrl,
-  () => {
+  (url) => {
     status.value = "loading"
+    releaseDecoded()
+    src.value = url
+    triedDecode = false
+    rotation.value = 0
     reset()
   },
 )
@@ -39,6 +52,35 @@ function reset() {
   ty.value = 0
 }
 
+function releaseDecoded() {
+  if (decodedUrl) URL.revokeObjectURL(decodedUrl)
+  decodedUrl = ""
+}
+
+// Browsers without native HEIC support get a client-side decode before the image is declared broken
+async function onError() {
+  if (!triedDecode && HEIF_EXTENSIONS.has(extension(props.file.name))) {
+    triedDecode = true
+    const url = props.downloadUrl
+    try {
+      const blob = await decodeHeif(await fetchBuffer(url))
+      if (url !== props.downloadUrl) return
+      decodedUrl = URL.createObjectURL(blob)
+      src.value = decodedUrl
+      return
+    } catch {
+      /* falls through to the error state */
+    }
+  }
+  status.value = "error"
+}
+
+function rotate(step: number) {
+  rotation.value += step
+  zoomTo(1)
+  reset()
+}
+
 function onLoad() {
   const img = image.value
   if (!img) return
@@ -46,12 +88,15 @@ function onLoad() {
   status.value = "ready"
 }
 
-// Size of the image as laid out at scale 1 (object-fit: contain)
+// Size of the image as laid out at scale 1 (object-fit: contain), taking quarter turns into account
 function fitSize() {
   const box = stage.value
   if (!box || !natural.value.w) return { w: 0, h: 0 }
-  const ratio = Math.min(box.clientWidth / natural.value.w, box.clientHeight / natural.value.h, 1)
-  return { w: natural.value.w * ratio, h: natural.value.h * ratio }
+  const turned = Math.abs(rotation.value / 90) % 2 === 1
+  const w = turned ? natural.value.h : natural.value.w
+  const h = turned ? natural.value.w : natural.value.h
+  const ratio = Math.min(box.clientWidth / w, box.clientHeight / h, 1)
+  return { w: w * ratio, h: h * ratio }
 }
 
 function clamp() {
@@ -147,19 +192,34 @@ function onKey(e: KeyboardEvent) {
   else if (e.key === "+" || e.key === "=") zoomTo(scale.value * 1.5)
   else if (e.key === "-") zoomTo(scale.value / 1.5)
   else if (e.key === "0") reset()
+  else if (e.key === "r") rotate(e.shiftKey ? -90 : 90)
 }
 
-onMounted(() => window.addEventListener("keydown", onKey))
-onBeforeUnmount(() => window.removeEventListener("keydown", onKey))
+onMounted(() => {
+  window.addEventListener("keydown", onKey)
+  observer = new ResizeObserver(() => {
+    if (stage.value) box.value = { w: stage.value.clientWidth, h: stage.value.clientHeight }
+  })
+  if (stage.value) observer.observe(stage.value)
+})
+onBeforeUnmount(() => {
+  window.removeEventListener("keydown", onKey)
+  observer?.disconnect()
+  releaseDecoded()
+})
 
-const transform = computed(() => `translate(${tx.value}px, ${ty.value}px) scale(${scale.value})`)
+const transform = computed(() => `translate(-50%, -50%) translate(${tx.value}px, ${ty.value}px) scale(${scale.value}) rotate(${rotation.value}deg)`)
+const turned = computed(() => Math.abs(rotation.value / 90) % 2 === 1)
+const limits = computed(() =>
+  turned.value ? { maxWidth: `${box.value.h}px`, maxHeight: `${box.value.w}px` } : {},
+)
 const cursor = computed(() => (scale.value > 1 ? (dragging.value ? "grabbing" : "grab") : "zoom-in"))
 </script>
 
 <template>
   <div class="image">
     <PreviewToolbar>
-      <SiblingNav v-bind="nav" @prev="nav.prev" @next="nav.next" />
+      <SiblingNav :nav="nav" />
       <span class="spacer" />
       <span v-if="natural.w" class="hint">{{ natural.w }} × {{ natural.h }}</span>
       <FluentButton tone="subtle" icon-only :aria-label="t('preview.image.zoomOut')" :disabled="scale <= 1" @click="zoomTo(scale / 1.5)">
@@ -169,7 +229,13 @@ const cursor = computed(() => (scale.value > 1 ? (dragging.value ? "grabbing" : 
       <FluentButton tone="subtle" icon-only :aria-label="t('preview.image.zoomIn')" :disabled="scale >= MAX_SCALE" @click="zoomTo(scale * 1.5)">
         <FluentSvgIcon :svg="previewIcons.zoomIn" :size="18" />
       </FluentButton>
-      <FluentButton tone="subtle" icon-only :aria-label="t('preview.image.fit')" :disabled="scale === 1" @click="reset">
+      <FluentButton tone="subtle" icon-only :aria-label="t('preview.image.rotateLeft')" @click="rotate(-90)">
+        <FluentSvgIcon :svg="previewIcons.arrowRotateLeft" :size="18" />
+      </FluentButton>
+      <FluentButton tone="subtle" icon-only :aria-label="t('preview.image.rotateRight')" @click="rotate(90)">
+        <FluentSvgIcon :svg="previewIcons.arrowRotateRight" :size="18" />
+      </FluentButton>
+      <FluentButton tone="subtle" icon-only :aria-label="t('preview.image.fit')" :disabled="scale === 1 && rotation === 0" @click="rotation = 0; reset()">
         <FluentSvgIcon :svg="previewIcons.arrowReset" :size="18" />
       </FluentButton>
       <FluentButton tone="subtle" @click="openOriginal">
@@ -199,15 +265,15 @@ const cursor = computed(() => (scale.value > 1 ? (dragging.value ? "grabbing" : 
     >
       <img
         ref="image"
-        :key="downloadUrl"
+        :key="src"
         class="stage__img"
         :class="{ 'stage__img--animate': !dragging }"
-        :src="downloadUrl"
+        :src="src"
         :alt="file.name"
-        :style="{ transform }"
+        :style="{ transform, ...limits }"
         draggable="false"
         @load="onLoad"
-        @error="status = 'error'"
+        @error="onError"
       />
       <div v-if="status === 'loading'" class="stage__loading">{{ t("preview.image.loading") }}</div>
     </div>
@@ -225,8 +291,8 @@ const cursor = computed(() => (scale.value > 1 ? (dragging.value ? "grabbing" : 
 }
 .stage__img {
   position: absolute;
-  inset: 0;
-  margin: auto;
+  left: 50%;
+  top: 50%;
   max-width: 100%;
   max-height: 100%;
   pointer-events: none;
