@@ -1,0 +1,23 @@
+export default {
+  title: "元信息",
+  description: "按路径设置密码、隐藏规则、说明文档和写入权限。",
+  columns: { path: "路径", password: "密码", write: "写入", hide: "隐藏规则" },
+  yes: "是",
+  no: "否",
+  empty: "还没有元信息",
+  emptyDetail: "为某个路径新建一条元信息，即可为它设置密码或隐藏文件。",
+  panel: { create: "新建元信息", edit: "编辑元信息" },
+  fields: {
+    path: "路径",
+    pathHelp: "例如 /movies，必须以文件夹路径开头。",
+    pathRequired: "请输入路径",
+    password: "访问密码",
+    passwordHelp: "留空表示不设密码。",
+    write: "允许写入",
+    hide: "隐藏规则",
+    hideHelp: "每行一个正则表达式，匹配的文件名将被隐藏。",
+    readme: "说明文档",
+    readmeHelp: "支持 Markdown，显示在目录页底部。",
+    applyToSub: "同时应用到子文件夹",
+  },
+}

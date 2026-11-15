@@ -1,3 +1,4 @@
+import { t } from "@/i18n"
 import { apiError, getToken } from "./http"
 import type { ApiEnvelope } from "./types"
 
@@ -45,12 +46,12 @@ function send<T>(
         /* non-JSON response */
       }
       const code = envelope?.code ?? xhr.status
-      if (!envelope || code !== 200) return reject(apiError(code, envelope?.message || xhr.statusText || "上传失败"))
+      if (!envelope || code !== 200) return reject(apiError(code, envelope?.message || xhr.statusText || t("errors.uploadFailed")))
       resolve(envelope.data)
     }
     xhr.onerror = () => {
       done()
-      reject(apiError(0, "无法连接到服务器"))
+      reject(apiError(0, t("errors.network")))
     }
     xhr.onabort = () => {
       done()

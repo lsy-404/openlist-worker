@@ -1,4 +1,5 @@
 import { onBeforeUnmount, ref, shallowRef, watch } from "vue"
+import { t } from "@/i18n"
 import { proxyUrl } from "./download"
 
 const AUTO_LOAD_LIMIT = 2 * 1024 * 1024
@@ -44,7 +45,7 @@ export function useTextFile(source: () => { url: string; size: number }) {
             res = attempt
             break
           }
-          failure = new Error(`服务器返回 ${attempt.status}`)
+          failure = new Error(t("preview.text.serverStatus", { status: attempt.status }))
         } catch (err) {
           if (current.signal.aborted) return
           failure = err
@@ -60,7 +61,7 @@ export function useTextFile(source: () => { url: string; size: number }) {
       if (current.signal.aborted) return
       error.value =
         err instanceof TypeError
-          ? "无法读取文件内容，下载地址可能跨域或被站点安全策略阻止。"
+          ? t("preview.text.blocked")
           : err instanceof Error
             ? err.message
             : String(err)

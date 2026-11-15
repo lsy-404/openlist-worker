@@ -1,8 +1,11 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n"
 import dismiss from "@fluentui/svg-icons/icons/dismiss_24_regular.svg?raw"
 import filter from "@fluentui/svg-icons/icons/filter_24_regular.svg?raw"
 import { FluentSvgIcon } from "@platform-kit/fluent/vue"
 import { folderFilter } from "./state"
+
+const { t } = useI18n()
 </script>
 
 <template>
@@ -12,13 +15,13 @@ import { folderFilter } from "./state"
       v-model="folderFilter.text"
       class="filter__input"
       type="text"
-      placeholder="筛选当前列表"
-      aria-label="筛选当前列表"
+      :placeholder="t('search.filter.placeholder')"
+      :aria-label="t('search.filter.label')"
       autocomplete="off"
       spellcheck="false"
       @keydown.esc="folderFilter.text = ''"
     />
-    <button v-if="folderFilter.text" class="filter__clear" type="button" aria-label="清除筛选" @click="folderFilter.text = ''">
+    <button v-if="folderFilter.text" class="filter__clear" type="button" :aria-label="t('search.filter.clear')" @click="folderFilter.text = ''">
       <FluentSvgIcon :svg="dismiss" :size="14" />
     </button>
   </label>

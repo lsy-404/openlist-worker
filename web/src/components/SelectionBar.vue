@@ -1,19 +1,21 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n"
 import { FluentButton, FluentSvgIcon } from "@platform-kit/fluent/vue"
 import type { ActionContext } from "@/actions"
 import { icons } from "@/utils/icons"
 import ActionBar from "./ActionBar.vue"
 
+const { t } = useI18n()
 defineProps<{ ctx: ActionContext }>()
 const emit = defineEmits<{ clear: [] }>()
 </script>
 
 <template>
-  <div class="selbar" role="region" aria-label="批量操作">
-    <FluentButton tone="subtle" icon-only aria-label="取消选择" title="取消选择" @click="emit('clear')">
+  <div class="selbar" role="region" :aria-label="t('browse.selection.label')">
+    <FluentButton tone="subtle" icon-only :aria-label="t('browse.selection.clear')" :title="t('browse.selection.clear')" @click="emit('clear')">
       <FluentSvgIcon :svg="icons.dismiss" :size="18" />
     </FluentButton>
-    <span class="selbar__count" aria-live="polite">已选择 {{ ctx.selection.length }} 项</span>
+    <span class="selbar__count" aria-live="polite">{{ t("browse.selection.count", { count: ctx.selection.length }) }}</span>
     <ActionBar :ctx="ctx" class="selbar__actions" />
   </div>
 </template>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n"
 import { computed } from "vue"
 import { FluentButton, FluentProgressBar, FluentSvgIcon } from "@platform-kit/fluent/vue"
 import {
@@ -14,6 +15,7 @@ import {
 import { formatSize } from "@/utils/format"
 import { icons } from "@/utils/icons"
 
+const { t } = useI18n()
 const total = computed(() => uploads.items.length)
 const finished = computed(() => uploads.items.filter((i) => i.status === "done").length)
 const failed = computed(() => uploads.items.filter((i) => i.status === "failed").length)
@@ -22,27 +24,21 @@ const bytes = computed(() => uploads.items.reduce((sum, i) => sum + i.size, 0))
 const sent = computed(() => uploads.items.reduce((sum, i) => sum + i.loaded, 0))
 
 const summary = computed(() => {
-  if (busy.value) return `正在上传 ${finished.value}/${total.value}`
-  return failed.value ? `${failed.value} 个文件上传失败` : `已上传 ${finished.value} 个文件`
+  if (busy.value) return t("files.uploads.uploading", { done: finished.value, total: total.value })
+  return failed.value ? t("files.uploads.failedCount", { count: failed.value }) : t("files.uploads.doneCount", { count: finished.value })
 })
 
-const STATUS_TEXT: Record<UploadStatus, string> = {
-  queued: "等待中",
-  uploading: "上传中",
-  done: "完成",
-  failed: "失败",
-  cancelled: "已取消",
-}
+const statusText = (status: UploadStatus) => t(`files.uploads.status.${status}`)
 
 function detail(item: UploadItem): string {
-  if (item.status === "failed") return item.error || "上传失败"
+  if (item.status === "failed") return item.error || t("errors.uploadFailed")
   if (item.status === "uploading") return `${formatSize(item.loaded)} / ${formatSize(item.size)}`
-  return `${STATUS_TEXT[item.status]} · ${formatSize(item.size)}`
+  return `${statusText(item.status)} · ${formatSize(item.size)}`
 }
 </script>
 
 <template>
-  <section v-if="total" class="uploads" aria-label="上传队列">
+  <section v-if="total" class="uploads" :aria-label="t('files.uploads.queue')">
     <header class="uploads__head">
       <button
         type="button"
@@ -55,12 +51,12 @@ function detail(item: UploadItem): string {
         <span class="uploads__summary" aria-live="polite">{{ summary }}</span>
         <FluentSvgIcon :svg="uploads.expanded ? icons.arrowDown : icons.arrowUp" :size="14" />
       </button>
-      <FluentButton v-if="busy" tone="subtle" @click="cancelAll">全部取消</FluentButton>
-      <FluentButton v-else tone="subtle" icon-only aria-label="清除已完成" title="清除已完成" @click="clearFinished">
+      <FluentButton v-if="busy" tone="subtle" @click="cancelAll">{{ t("files.uploads.cancelAll") }}</FluentButton>
+      <FluentButton v-else tone="subtle" icon-only :aria-label="t('files.uploads.clearFinished')" :title="t('files.uploads.clearFinished')" @click="clearFinished">
         <FluentSvgIcon :svg="icons.dismiss" :size="18" />
       </FluentButton>
     </header>
-    <FluentProgressBar v-if="busy" :value="sent" :max="bytes || 1" label="总进度" class="uploads__total" />
+    <FluentProgressBar v-if="busy" :value="sent" :max="bytes || 1" :label="t('files.uploads.totalProgress')" class="uploads__total" />
 
     <ul v-show="uploads.expanded" id="upload-list" class="uploads__list">
       <li v-for="item in uploads.items" :key="item.id" class="item" :data-status="item.status">
@@ -71,15 +67,15 @@ function detail(item: UploadItem): string {
             v-if="item.status === 'uploading'"
             :value="item.loaded"
             :max="item.size || 1"
-            :label="`${item.name} 的上传进度`"
+            :label="t('files.uploads.progressOf', { name: item.name })"
           />
         </div>
         <FluentButton
           v-if="item.status === 'queued' || item.status === 'uploading'"
           tone="subtle"
           icon-only
-          :aria-label="`取消上传 ${item.name}`"
-          title="取消"
+          :aria-label="t('files.uploads.cancelItem', { name: item.name })"
+          :title="t('common.cancel')"
           @click="cancelUpload(item)"
         >
           <FluentSvgIcon :svg="icons.dismiss" :size="16" />
@@ -88,8 +84,8 @@ function detail(item: UploadItem): string {
           v-else-if="item.status === 'failed' || item.status === 'cancelled'"
           tone="subtle"
           icon-only
-          :aria-label="`重试上传 ${item.name}`"
-          title="重试"
+          :aria-label="t('files.uploads.retryItem', { name: item.name })"
+          :title="t('common.retry')"
           @click="retryUpload(item)"
         >
           <FluentSvgIcon :svg="icons.arrowCounterclockwise" :size="16" />

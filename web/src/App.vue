@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { ref, watchEffect } from "vue"
+import { computed, ref, watchEffect } from "vue"
+import { useI18n } from "vue-i18n"
 import { RouterView, useRoute } from "vue-router"
 import { FluentButton, FluentTheme } from "@platform-kit/fluent/vue"
-import AppFooter from "@/components/AppFooter.vue"
-import AppHeader from "@/components/AppHeader.vue"
+import AppFrame from "@/components/AppFrame.vue"
 import FileOpsHost from "@/components/FileOpsHost.vue"
 import UploadPanel from "@/components/UploadPanel.vue"
 import StateMessage from "@/components/StateMessage.vue"
@@ -12,7 +12,9 @@ import { prefs, resolvedTheme } from "@/stores/prefs"
 import { loadSession, session, siteTitle } from "@/stores/session"
 import { icons } from "@/utils/icons"
 
+const { t } = useI18n()
 const route = useRoute()
+const hasSidebar = computed(() => route.matched.some((record) => !!record.components?.sidebar && (record.meta.showSidebar?.() ?? true)))
 const retrying = ref(false)
 
 function headElement(selector: string, create: () => HTMLElement): HTMLElement {
@@ -44,7 +46,7 @@ watchEffect(() => {
 })
 
 watchEffect(() => {
-  if (route.path.startsWith("/@")) document.title = siteTitle.value
+  if (route.path.startsWith("/@") && !route.path.startsWith("/@manage")) document.title = siteTitle.value
 })
 
 watchEffect(() => {
@@ -64,18 +66,19 @@ async function retry() {
 
 <template>
   <FluentTheme :mode="prefs.theme" class="app">
-    <AppHeader />
-    <StateMessage
-      v-if="session.ready && session.unreachable"
-      class="app__offline"
-      :icon="icons.warning"
-      title="无法连接到服务器"
-      detail="请检查网络连接后重试；如果问题持续，服务器可能正在维护。"
-    >
-      <FluentButton tone="primary" :busy="retrying" @click="retry">重试</FluentButton>
-    </StateMessage>
-    <RouterView v-else />
-    <AppFooter />
+    <AppFrame :sidebar="hasSidebar">
+      <template #sidebar><RouterView name="sidebar" /></template>
+      <StateMessage
+        v-if="session.ready && session.unreachable"
+        class="app__offline"
+        :icon="icons.warning"
+        :title="t('shell.offline.title')"
+        :detail="t('shell.offline.detail')"
+      >
+        <FluentButton tone="primary" :busy="retrying" @click="retry">{{ t("common.retry") }}</FluentButton>
+      </StateMessage>
+      <RouterView v-else />
+    </AppFrame>
     <FileOpsHost />
     <UploadPanel />
     <ToastHost />

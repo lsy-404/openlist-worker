@@ -1,5 +1,6 @@
 import { computed, reactive } from "vue"
 import { api, ApiError, clearToken, getToken, setUnauthorizedHandler, type SiteSettings, type UserInfo } from "@/api"
+import { t } from "@/i18n"
 import { notify } from "@/stores/toast"
 
 const RETURN_KEY = "login.return"
@@ -11,15 +12,16 @@ export const session = reactive<{
   unreachable: boolean
 }>({ settings: null, user: null, ready: false, unreachable: false })
 
-export const siteTitle = computed(() => session.settings?.site_title || "OpenList")
+export const siteTitle = computed(() => session.settings?.site_title || t("shell.siteFallback"))
 export const isGuest = computed(() => !session.user || session.user.username === "guest")
 export const basePath = computed(() => session.user?.base_path || "/")
 
-// OpenList roles: 0 general, 1 guest, 2 admin
-export const roleLabel = computed(() => {
-  const roles = [session.user?.role ?? 1].flat()
-  return roles.includes(2) ? "管理员" : roles.includes(0) ? "用户" : "游客"
-})
+// Roles: 0 general, 1 guest, 2 admin
+const roles = computed(() => [session.user?.role ?? 1].flat())
+export const isAdmin = computed(() => roles.value.includes(2))
+export const roleLabel = computed(() =>
+  isAdmin.value ? t("shell.roles.admin") : roles.value.includes(0) ? t("shell.roles.user") : t("shell.roles.guest"),
+)
 
 export function safeReturnPath(path: unknown): string | null {
   if (typeof path !== "string" || !path.startsWith("/")) return null
@@ -33,7 +35,7 @@ let expiredToken = ""
 setUnauthorizedHandler((token) => {
   if (expiredToken === token) return
   expiredToken = token
-  if (location.pathname !== "/@login") notify("登录已过期，已切换为游客", "info")
+  if (location.pathname !== "/@login") notify(t("shell.session.expired"), "info")
   setTimeout(() => {
     if (getToken() !== token) return
     clearToken()

@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n"
 import { ref, watch } from "vue"
 import { FluentButton, FluentDialog, FluentPasswordField } from "@platform-kit/fluent/vue"
 
+const { t } = useI18n()
 const props = defineProps<{ open: boolean; path: string; wrong: boolean; busy: boolean }>()
 const emit = defineEmits<{ submit: [password: string]; cancel: [] }>()
 
@@ -19,25 +21,25 @@ function submit() {
 </script>
 
 <template>
-  <FluentDialog :open="open" label="需要密码" @close="emit('cancel')">
+  <FluentDialog :open="open" :label="t('files.password.label')" @close="emit('cancel')">
     <template #title>
-      <h2 class="title">此文件夹需要密码</h2>
+      <h2 class="title">{{ t("files.password.title") }}</h2>
     </template>
     <form class="form" @submit.prevent="submit">
       <p class="path">{{ path }}</p>
       <FluentPasswordField
         v-model="value"
-        label="访问密码"
+        :label="t('files.password.field')"
         autocomplete="off"
         :invalid="wrong"
         autofocus
       />
-      <p v-if="wrong" class="error" role="alert">密码不正确，请重试。</p>
+      <p v-if="wrong" class="error" role="alert">{{ t("files.password.wrong") }}</p>
       <button type="submit" hidden />
     </form>
     <template #footer>
-      <FluentButton tone="primary" :busy="busy" :disabled="!value" @click="submit">确定</FluentButton>
-      <FluentButton @click="emit('cancel')">取消</FluentButton>
+      <FluentButton tone="primary" :busy="busy" :disabled="!value" @click="submit">{{ t("common.confirm") }}</FluentButton>
+      <FluentButton @click="emit('cancel')">{{ t("common.cancel") }}</FluentButton>
     </template>
   </FluentDialog>
 </template>

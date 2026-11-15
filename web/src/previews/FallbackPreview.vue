@@ -1,15 +1,17 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n"
 import { FluentSvgIcon } from "@platform-kit/fluent/vue"
 import { iconForEntry } from "@/utils/icons"
 import type { PreviewProps } from "./registry"
 
+const { t } = useI18n()
 const props = defineProps<PreviewProps>()
 </script>
 
 <template>
   <div class="fallback">
     <FluentSvgIcon :svg="iconForEntry(props.file)" :size="56" />
-    <p>此类型的文件暂不支持在线预览</p>
+    <p>{{ t("preview.fallback") }}</p>
   </div>
 </template>
 

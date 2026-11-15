@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n"
 import { ref, watch } from "vue"
 import { FluentSvgIcon } from "@platform-kit/fluent/vue"
 import PreviewNotice from "./PreviewNotice.vue"
@@ -9,6 +10,7 @@ import { isAudio } from "./kinds"
 import type { PreviewProps } from "./registry"
 import { useSiblings } from "./useSiblings"
 
+const { t } = useI18n()
 const props = defineProps<PreviewProps>()
 const failed = ref(false)
 const nav = useSiblings(() => ({ path: props.path, related: props.file.related }), isAudio)
@@ -40,8 +42,8 @@ function onError() {
   <PreviewNotice
     v-if="failed"
     tone="error"
-    title="无法播放音频"
-    detail="当前浏览器无法播放此音频格式，或文件加载失败。"
+    :title="t('preview.audio.errorTitle')"
+    :detail="t('preview.audio.errorDetail')"
     :download-url="downloadUrl"
     :filename="file.name"
   />

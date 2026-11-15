@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n"
 import { onMounted } from "vue"
 import { useRoute, useRouter } from "vue-router"
 import { FluentProgressRing } from "@platform-kit/fluent/vue"
@@ -6,6 +7,7 @@ import { getToken, setToken } from "@/api"
 import { loadUser, rememberReturnPath, safeReturnPath, takeReturnPath } from "@/stores/session"
 import { notify } from "@/stores/toast"
 
+const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 
@@ -18,7 +20,7 @@ onMounted(async () => {
     setToken(token)
     await loadUser()
     const remembered = takeReturnPath()
-    if (!getToken()) notify("登录失败，已以游客身份继续", "danger")
+    if (!getToken()) notify(t("errors.login.failed"), "danger")
     await router.replace(target ?? remembered)
     return
   }
@@ -29,8 +31,8 @@ onMounted(async () => {
 
 <template>
   <main class="login" role="status">
-    <FluentProgressRing :size="32" indeterminate label="正在登录" />
-    <p>正在跳转到登录…</p>
+    <FluentProgressRing :size="32" indeterminate :label="t('errors.login.signingIn')" />
+    <p>{{ t("errors.login.redirecting") }}</p>
   </main>
 </template>
 

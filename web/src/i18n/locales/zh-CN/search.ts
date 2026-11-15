@@ -1,0 +1,32 @@
+export default {
+  filter: {
+    placeholder: "筛选当前列表",
+    label: "筛选当前列表",
+    clear: "清除筛选",
+  },
+  box: {
+    placeholder: "搜索文件  {key} K",
+    toggle: "搜索",
+    toggleTitle: "搜索 (Ctrl+K)",
+    field: "搜索文件",
+    close: "关闭搜索",
+  },
+  dialog: {
+    label: "搜索",
+    title: "搜索“{query}”",
+    scopeLabel: "搜索范围",
+    scopeFolder: "当前文件夹",
+    scopeSite: "全站",
+    searching: "正在搜索",
+    searchingHint: "正在搜索，目录较多时可能需要一些时间",
+    unavailable: "搜索暂不可用",
+    failed: "搜索失败",
+    noResults: "没有找到匹配项",
+    noResultsFolder: "当前文件夹及其子文件夹中没有匹配的名称。",
+    noResultsSite: "全站没有匹配的名称。",
+    searchSite: "在全站搜索",
+    count: "共 {count} 项",
+    folder: "文件夹",
+    loadMore: "加载更多（还有 {count} 项）",
+  },
+}

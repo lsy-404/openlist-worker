@@ -1,28 +1,30 @@
 <script setup lang="ts">
 import { computed } from "vue"
+import { useI18n } from "vue-i18n"
 import { RouterLink, useRoute, useRouter } from "vue-router"
 import { FluentButton, FluentSvgIcon } from "@platform-kit/fluent/vue"
 import MenuButton from "@/components/MenuButton.vue"
-import { prefs, type ThemeMode } from "@/stores/prefs"
+import { localeOptions, type Locale } from "@/i18n/locales"
+import { prefs, resolvedTheme, toggleTheme } from "@/stores/prefs"
 import SearchBox from "@/search/SearchBox.vue"
-import { isGuest, logout, rememberReturnPath, roleLabel, session, siteTitle } from "@/stores/session"
+import { isAdmin, isGuest, logout, rememberReturnPath, roleLabel, session, siteTitle } from "@/stores/session"
 import { getToken } from "@/api"
 import { icons } from "@/utils/icons"
 
+defineProps<{ navToggle?: boolean; navOpen?: boolean }>()
+defineEmits<{ "toggle-nav": [] }>()
+
+const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 
-const themeItems = [
-  { value: "light", label: "浅色" },
-  { value: "dark", label: "深色" },
-  { value: "system", label: "跟随系统" },
-]
-const themeIcon = computed(() => (prefs.theme === "dark" ? icons.weatherMoon : prefs.theme === "light" ? icons.weatherSunny : icons.desktop))
+const themeIcon = computed(() => (resolvedTheme.value === "dark" ? icons.weatherMoon : icons.weatherSunny))
 
 const hasToken = !!getToken()
 const userItems = computed(() => [
   { value: "profile", label: `${session.user?.username ?? ""} · ${roleLabel.value}`, disabled: true },
-  { value: "logout", label: "退出登录" },
+  ...(isAdmin.value ? [{ value: "admin", label: t("shell.header.admin") }] : []),
+  { value: "logout", label: t("shell.header.logout") },
 ])
 
 function login() {
@@ -32,11 +34,23 @@ function login() {
 
 function onUser(value: string) {
   if (value === "logout") void logout()
+  else if (value === "admin") void router.push("/@manage")
 }
 </script>
 
 <template>
   <header class="header">
+    <FluentButton
+      v-if="navToggle"
+      class="header__nav-toggle"
+      tone="subtle"
+      icon-only
+      :aria-label="navOpen ? t('shell.header.closeNav') : t('shell.header.openNav')"
+      :aria-expanded="navOpen"
+      @click="$emit('toggle-nav')"
+    >
+      <FluentSvgIcon :svg="icons.navigation" :size="20" />
+    </FluentButton>
     <RouterLink to="/" class="brand">
       <img v-if="session.settings?.logo" class="brand__logo" :src="String(session.settings.logo)" alt="" />
       <span class="brand__title">{{ siteTitle }}</span>
@@ -45,23 +59,30 @@ function onUser(value: string) {
     <div class="header__search" data-slot="header-search"><slot name="search"><SearchBox /></slot></div>
 
     <div class="header__tools">
+      <FluentButton v-if="isAdmin" class="header__admin" tone="subtle" @click="router.push('/@manage')">
+        <FluentSvgIcon :svg="icons.settings" :size="20" />
+        <span class="header__admin-text">{{ t("shell.header.admin") }}</span>
+      </FluentButton>
       <MenuButton
-        :icon="themeIcon"
-        label="主题"
-        :items="themeItems"
-        :model-value="prefs.theme"
-        @select="(v) => (prefs.theme = v as ThemeMode)"
+        :icon="icons.localLanguage"
+        :label="t('shell.header.language')"
+        :items="localeOptions"
+        :model-value="prefs.locale"
+        @select="(v) => (prefs.locale = v as Locale)"
       />
+      <FluentButton tone="subtle" icon-only :aria-label="t('shell.header.toggleTheme')" :title="t('shell.header.toggleTheme')" @click="toggleTheme">
+        <FluentSvgIcon :svg="themeIcon" :size="20" />
+      </FluentButton>
       <span v-if="!session.ready && hasToken" class="header__pending" aria-hidden="true" />
       <FluentButton v-else-if="isGuest" tone="subtle" @click="login">
         <FluentSvgIcon :svg="icons.person" :size="20" />
-        登录
+        {{ t("shell.header.login") }}
       </FluentButton>
       <template v-else>
         <MenuButton
           :icon="icons.person"
           :text="session.user?.username"
-          label="账户"
+          :label="t('shell.header.account')"
           :items="userItems"
           @select="onUser"
         />
@@ -127,8 +148,18 @@ function onUser(value: string) {
   font-size: 0.75rem;
   white-space: nowrap;
 }
+.header__nav-toggle {
+  flex: none;
+  margin-inline-end: -8px;
+}
+@media (min-width: 901px) {
+  .header__nav-toggle {
+    display: none;
+  }
+}
 @media (max-width: 640px) {
-  .header__role {
+  .header__role,
+  .header__admin-text {
     display: none;
   }
 }

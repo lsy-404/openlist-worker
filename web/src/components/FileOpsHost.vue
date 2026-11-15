@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n"
 import { computed, nextTick, ref, watch } from "vue"
 import { FluentButton, FluentDialog, FluentField, FluentNotice, FluentProgressBar, FluentSvgIcon } from "@platform-kit/fluent/vue"
 import { api } from "@/api"
@@ -9,9 +10,10 @@ import { joinPath, parentPath, splitPath } from "@/utils/path"
 
 type Operation = Extract<DialogRequest, { run: unknown }>
 
+const { t, locale } = useI18n()
 const dialog = computed(() => activeDialog.value)
 const operation = computed(() => (dialog.value && dialog.value.kind !== "conflict" ? (dialog.value as Operation) : null))
-const heading = computed(() => (dialog.value?.kind === "conflict" ? "文件已存在" : (operation.value?.title ?? "")))
+const heading = computed(() => (dialog.value?.kind === "conflict" ? t("files.conflict.title") : (operation.value?.title ?? "")))
 
 const busy = ref(false)
 const error = ref("")
@@ -23,7 +25,7 @@ const dirsLoading = ref(false)
 const dirsError = ref("")
 const form = ref<HTMLElement | null>(null)
 
-const collator = new Intl.Collator("zh-CN", { numeric: true, sensitivity: "base" })
+const collator = computed(() => new Intl.Collator(locale.value, { numeric: true, sensitivity: "base" }))
 let loadId = 0
 async function loadDirs(path: string) {
   const id = ++loadId
@@ -32,7 +34,7 @@ async function loadDirs(path: string) {
   try {
     const list = await api.fsDirs(path, passwordFor(path))
     if (id !== loadId) return
-    dirs.value = (list ?? []).map((d) => d.name).sort(collator.compare)
+    dirs.value = (list ?? []).map((d) => d.name).sort(collator.value.compare)
   } catch (err) {
     if (id !== loadId) return
     dirs.value = []
@@ -70,7 +72,7 @@ function enter(path: string) {
 
 const crumbs = computed(() => {
   const parts = splitPath(folder.value)
-  return [{ name: "根目录", path: "/" }, ...parts.map((name, i) => ({ name, path: "/" + parts.slice(0, i + 1).join("/") }))]
+  return [{ name: t("files.picker.root"), path: "/" }, ...parts.map((name, i) => ({ name, path: "/" + parts.slice(0, i + 1).join("/") }))]
 })
 
 const blocked = computed(() => (dialog.value?.kind === "folder" ? dialog.value.blocked(folder.value) : null))
@@ -117,7 +119,7 @@ const shownConflicts = computed(() => (dialog.value?.kind === "conflict" ? dialo
 </script>
 
 <template>
-  <FluentDialog :open="!!dialog" :label="heading || '对话框'" @close="cancel">
+  <FluentDialog :open="!!dialog" :label="heading || t('files.dialogs.fallbackLabel')" @close="cancel">
     <template #title>
       <h2 class="title">{{ heading }}</h2>
     </template>
@@ -137,7 +139,7 @@ const shownConflicts = computed(() => (dialog.value?.kind === "conflict" ? dialo
     </div>
 
     <div v-else-if="dialog?.kind === 'folder'" class="body">
-      <nav class="crumbs" aria-label="目标位置">
+      <nav class="crumbs" :aria-label="t('files.picker.label')">
         <template v-for="(crumb, i) in crumbs" :key="crumb.path">
           <FluentSvgIcon v-if="i" :svg="icons.chevronRight" :size="12" />
           <button
@@ -151,12 +153,12 @@ const shownConflicts = computed(() => (dialog.value?.kind === "conflict" ? dialo
         </template>
       </nav>
       <div class="dirs" :aria-busy="dirsLoading">
-        <FluentProgressBar v-if="dirsLoading" indeterminate label="加载中" class="dirs__bar" />
+        <FluentProgressBar v-if="dirsLoading" indeterminate :label="t('common.loading')" class="dirs__bar" />
         <ul class="dirs__list">
           <li v-if="folder !== '/'">
             <button type="button" class="dirs__item" @click="enter(parentPath(folder))">
               <FluentSvgIcon :svg="icons.folderArrowUp" :size="20" />
-              <span>上一级</span>
+              <span>{{ t("files.picker.parent") }}</span>
             </button>
           </li>
           <li v-for="name in dirs" :key="name">
@@ -166,26 +168,26 @@ const shownConflicts = computed(() => (dialog.value?.kind === "conflict" ? dialo
             </button>
           </li>
         </ul>
-        <p v-if="!dirsLoading && !dirs.length && !dirsError" class="hint">没有子文件夹</p>
+        <p v-if="!dirsLoading && !dirs.length && !dirsError" class="hint">{{ t("files.picker.empty") }}</p>
         <FluentNotice v-if="dirsError" tone="danger" role="alert">{{ dirsError }}</FluentNotice>
       </div>
-      <p class="hint" aria-live="polite">{{ blocked ?? `目标：${folder}` }}</p>
+      <p class="hint" aria-live="polite">{{ blocked ?? t("files.picker.target", { folder }) }}</p>
       <FluentNotice v-if="error" tone="danger" role="alert">{{ error }}</FluentNotice>
     </div>
 
     <div v-else-if="dialog?.kind === 'conflict'" class="body">
-      <p class="text">以下 {{ dialog.names.length }} 个文件在目标位置已存在：</p>
+      <p class="text">{{ t("files.conflict.message", { count: dialog.names.length }) }}</p>
       <ul class="names">
         <li v-for="name in shownConflicts" :key="name">{{ name }}</li>
-        <li v-if="dialog.names.length > shownConflicts.length">等共 {{ dialog.names.length }} 项</li>
+        <li v-if="dialog.names.length > shownConflicts.length">{{ t("files.conflict.more", { count: dialog.names.length }) }}</li>
       </ul>
     </div>
 
     <template #footer>
       <template v-if="dialog?.kind === 'conflict'">
-        <FluentButton tone="primary" @click="resolveConflict(true)">覆盖</FluentButton>
-        <FluentButton @click="resolveConflict(false)">跳过已存在的</FluentButton>
-        <FluentButton @click="cancel">取消上传</FluentButton>
+        <FluentButton tone="primary" @click="resolveConflict(true)">{{ t("files.conflict.overwrite") }}</FluentButton>
+        <FluentButton @click="resolveConflict(false)">{{ t("files.conflict.skip") }}</FluentButton>
+        <FluentButton @click="cancel">{{ t("files.conflict.cancel") }}</FluentButton>
       </template>
       <template v-else-if="operation">
         <FluentButton
@@ -196,7 +198,7 @@ const shownConflicts = computed(() => (dialog.value?.kind === "conflict" ? dialo
         >
           {{ operation.confirmLabel }}
         </FluentButton>
-        <FluentButton :disabled="busy" @click="cancel">取消</FluentButton>
+        <FluentButton :disabled="busy" @click="cancel">{{ t("common.cancel") }}</FluentButton>
       </template>
     </template>
   </FluentDialog>

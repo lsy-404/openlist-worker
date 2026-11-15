@@ -1,0 +1,110 @@
+import type zh from "../zh-CN/files"
+
+const messages: typeof zh = {
+  target: {
+    one: "“{name}”",
+    many: "{count} items",
+  },
+  errors: {
+    invalidName: "The name can't be . or .. or contain / or \\",
+    nameExists: "Items with the same name already exist in the destination: {names}{more}",
+    nameSeparator: ", ",
+    nameMore: " and more",
+  },
+  actions: {
+    download: "Download",
+    copyLink: "Copy link",
+    upload: "Upload files",
+    uploadFolder: "Upload folder",
+    newFolder: "New folder",
+    rename: "Rename",
+    delete: "Delete",
+    downloadEach: "Download one by one",
+    move: {
+      label: "Move",
+      labelTo: "Move to…",
+      title: "Move {target} to",
+      confirm: "Move here",
+      done: "Moved {target}",
+    },
+    copy: {
+      label: "Copy",
+      labelTo: "Copy to…",
+      title: "Copy {target} to",
+      confirm: "Copy here",
+      done: "Copied {target}",
+    },
+  },
+  notices: {
+    linkCopied: "Link copied",
+    copyFailed: "Couldn't copy. Copy the link from the address bar instead.",
+    folderCreated: "Folder created",
+    renamed: "Renamed",
+    deleted: "Deleted {target}",
+    skippedFolders: "Skipped {count} folders",
+    nothingToUpload: "There are no files to upload",
+  },
+  dialogs: {
+    fallbackLabel: "Dialog",
+    newFolder: {
+      title: "New folder",
+      label: "Folder name",
+      confirm: "Create",
+    },
+    rename: {
+      title: "Rename",
+      label: "New name",
+      confirm: "Rename",
+    },
+    delete: {
+      title: "Delete",
+      message: "Delete {target}? This can't be undone.",
+      more: "…{count} items in total",
+      confirm: "Delete",
+    },
+  },
+  picker: {
+    label: "Destination",
+    root: "Root",
+    parent: "Up one level",
+    empty: "No subfolders",
+    target: "Destination: {folder}",
+    sameFolder: "The destination can't be the current folder",
+    insideSelf: "You can't choose a folder being moved or one of its subfolders",
+  },
+  conflict: {
+    title: "Files already exist",
+    message: "These {count} files already exist in the destination:",
+    more: "and {count} items in total",
+    overwrite: "Replace",
+    skip: "Skip existing",
+    cancel: "Cancel upload",
+  },
+  password: {
+    label: "Password required",
+    title: "This folder needs a password",
+    field: "Password",
+    wrong: "Incorrect password. Try again.",
+  },
+  uploads: {
+    queue: "Upload queue",
+    uploading: "Uploading {done}/{total}",
+    failedCount: "{count} files failed to upload",
+    doneCount: "Uploaded {count} files",
+    cancelAll: "Cancel all",
+    clearFinished: "Clear finished",
+    totalProgress: "Overall progress",
+    progressOf: "Upload progress of {name}",
+    cancelItem: "Cancel upload of {name}",
+    retryItem: "Retry upload of {name}",
+    status: {
+      queued: "Waiting",
+      uploading: "Uploading",
+      done: "Done",
+      failed: "Failed",
+      cancelled: "Cancelled",
+    },
+  },
+}
+
+export default messages

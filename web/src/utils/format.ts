@@ -1,3 +1,5 @@
+import { i18n } from "@/i18n"
+
 const UNITS = ["B", "KB", "MB", "GB", "TB", "PB"]
 
 export function formatSize(bytes: number): string {
@@ -11,19 +13,29 @@ export function formatSize(bytes: number): string {
   return `${unit === 0 || value >= 100 ? Math.round(value) : value.toFixed(1)} ${UNITS[unit]}`
 }
 
-const dateFormat = new Intl.DateTimeFormat("zh-CN", {
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-  hour: "2-digit",
-  minute: "2-digit",
-  hour12: false,
-})
+const dateFormats = new Map<string, Intl.DateTimeFormat>()
+
+function dateFormat(): Intl.DateTimeFormat {
+  const locale = i18n.global.locale.value
+  let format = dateFormats.get(locale)
+  if (!format) {
+    format = new Intl.DateTimeFormat(locale, {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    })
+    dateFormats.set(locale, format)
+  }
+  return format
+}
 
 export function formatDate(value: string | undefined): string {
   if (!value) return "—"
   const time = Date.parse(value)
-  return Number.isNaN(time) ? "—" : dateFormat.format(time)
+  return Number.isNaN(time) ? "—" : dateFormat().format(time)
 }
 
 export function extension(name: string): string {

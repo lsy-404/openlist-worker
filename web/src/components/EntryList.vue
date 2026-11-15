@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n"
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { RouterLink, useRouter } from "vue-router"
 import { FluentButton, FluentCheckbox, FluentMenu, FluentSvgIcon } from "@platform-kit/fluent/vue"
@@ -99,7 +100,12 @@ function onContextMenu(event: MouseEvent, entry: FsEntry) {
   void openMenu(entry, row)
 }
 
-const sortLabels: Record<SortKey, string> = { name: "名称", size: "大小", modified: "修改时间" }
+const { t } = useI18n()
+const sortLabels = computed<Record<SortKey, string>>(() => ({
+  name: t("browse.sort.name"),
+  size: t("browse.sort.size"),
+  modified: t("browse.sort.modified"),
+}))
 function ariaSort(key: SortKey) {
   return prefs.sortKey === key ? (prefs.sortOrder === "asc" ? "ascending" : "descending") : "none"
 }
@@ -142,7 +148,7 @@ function ariaSort(key: SortKey) {
         >
           <FluentCheckbox
             :model-value="selection.names.has(entry.name)"
-            :aria-label="`选择 ${entry.name}`"
+            :aria-label="t('browse.entryList.select', { name: entry.name })"
             @update:model-value="pick(entry.name)"
           />
         </span>
@@ -160,7 +166,7 @@ function ariaSort(key: SortKey) {
           class="entry__more"
           tone="subtle"
           icon-only
-          :aria-label="`${entry.name} 的更多操作`"
+          :aria-label="t('browse.entryList.moreFor', { name: entry.name })"
           aria-haspopup="menu"
           @click="(e: MouseEvent) => openMenu(entry, (e.currentTarget as HTMLElement))"
         >
@@ -170,12 +176,12 @@ function ariaSort(key: SortKey) {
     </ul>
 
     <div v-if="remaining > 0" ref="sentinel" class="more">
-      <FluentButton @click="showMore">显示更多（还有 {{ remaining }} 项）</FluentButton>
+      <FluentButton @click="showMore">{{ t("browse.entryList.showMore", { count: remaining }) }}</FluentButton>
     </div>
 
     <FluentMenu
       v-model:open="menu.open"
-      label="更多操作"
+      :label="t('browse.entryList.moreActions')"
       :anchor="menu.anchor"
       :items="menuItems"
       @select="onMenuSelect"
