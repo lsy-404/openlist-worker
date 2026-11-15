@@ -1,15 +1,18 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref, watch } from "vue"
+import { computed, onBeforeUnmount, ref, watch } from "vue"
 import { useI18n } from "vue-i18n"
 import { useRoute } from "vue-router"
 import AppFooter from "@/components/AppFooter.vue"
 import AppHeader from "@/components/AppHeader.vue"
+import TabStrip from "@/tabs/TabStrip.vue"
+import { state as tabState } from "@/tabs/store"
 
 defineProps<{ sidebar?: boolean }>()
 
 const { t } = useI18n()
 const route = useRoute()
 const open = ref(false)
+const showTabs = computed(() => route.path !== "/@login" && tabState.tabs.length > 0)
 
 watch(() => route.fullPath, () => (open.value = false))
 
@@ -35,7 +38,8 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey))
         </aside>
         <div v-if="open" class="frame__scrim" aria-hidden="true" @click="open = false" />
       </template>
-      <div class="frame__card" :class="{ 'frame__card--flush': !sidebar }">
+      <div class="frame__card" :class="{ 'frame__card--flush': !sidebar, 'frame__card--tabs': showTabs }">
+        <TabStrip v-if="showTabs" class="frame__tabs" />
         <div id="frame-toolbar" class="frame__toolbar"><slot name="toolbar" /></div>
         <div class="frame__content"><slot /></div>
         <div id="frame-status" class="frame__status" />
@@ -82,9 +86,17 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey))
 .frame__card--flush {
   margin-inline-start: 8px;
 }
-.frame__toolbar {
+.frame__card--tabs {
+  --tabs-h: 36px;
+}
+.frame__tabs {
   position: sticky;
   top: 56px;
+  z-index: 6;
+}
+.frame__toolbar {
+  position: sticky;
+  top: calc(56px + var(--tabs-h, 0px));
   z-index: 5;
   background: var(--fluent-surface);
   border-bottom: 1px solid var(--fluent-border);

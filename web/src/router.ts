@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from "vue-router"
 import { adminRoute } from "@/admin/routes"
 import BrowseSidebar from "@/browse/BrowseSidebar.vue"
 import BrowseView from "@/views/BrowseView.vue"
+import { installTabs } from "@/tabs/store"
 import LoginView from "@/views/LoginView.vue"
 
 export const router = createRouter({
@@ -13,3 +14,5 @@ export const router = createRouter({
   ],
   scrollBehavior: (to, from, saved) => saved ?? (to.path === from.path ? false : { top: 0 }),
 })
+
+installTabs(router)
