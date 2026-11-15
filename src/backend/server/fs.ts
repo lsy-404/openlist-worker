@@ -15,6 +15,14 @@ import { resolveShare } from "../internal/op/share"
 import { resolvePath } from "../internal/model/db"
 import { getUserFromContext } from "./middlewares"
 import {
+  isNodeUploadId,
+  nodeMultipartAbort,
+  nodeMultipartChunk,
+  nodeMultipartComplete,
+  nodeMultipartInit,
+  nodeMultipartStatus,
+} from "./fs_node_upload"
+import {
   can,
   canCopy,
   canMove,
@@ -1476,6 +1484,17 @@ fsRouter.post("/multipart/init", async (c) => {
     return permissionDenied(c)
   const requestContext = getStorageRequestContext(c)
 
+  const viaNode = await nodeMultipartInit(c, user, {
+    rawPath,
+    dir,
+    name,
+    actualDir,
+    size,
+    chunkSize: clampChunkSize(rawChunk),
+  })
+  if (viaNode) return viaNode
+  if (viaNode === null) return c.json({ code: 200, message: "success", data: null })
+
   try {
     const resolved = await resolvePath(actualDir)
     if (resolved.isVirtual) {
@@ -1552,6 +1571,7 @@ fsRouter.put("/multipart/chunk", async (c) => {
 
   const uploadId = c.req.header("X-Upload-Id") || ""
   const chunkIndex = parseInt(c.req.header("X-Chunk-Index") || "-1", 10)
+  if (isNodeUploadId(uploadId)) return nodeMultipartChunk(c, user, uploadId, chunkIndex)
   const session = uploadId ? getSession(uploadId) : undefined
 
   // 会话所有者校验：非本人会话按「不存在」处理（不泄露会话是否存在）
@@ -1615,6 +1635,7 @@ fsRouter.post("/multipart/complete", async (c) => {
   if (!canWrite(user)) return permissionDenied(c)
 
   const uploadId = c.req.header("X-Upload-Id") || ""
+  if (isNodeUploadId(uploadId)) return nodeMultipartComplete(c, user, uploadId)
   const session = uploadId ? getSession(uploadId) : undefined
   if (!session || !sessionOwnedBy(session, user)) {
     return c.json(
@@ -1668,6 +1689,7 @@ fsRouter.get("/multipart/status", async (c) => {
     return c.json({ code: 401, message: "Unauthorized", data: null }, 401)
   }
   const uploadId = c.req.query("upload_id") || ""
+  if (isNodeUploadId(uploadId)) return nodeMultipartStatus(c, user, uploadId)
   const session = uploadId ? getSession(uploadId) : undefined
   if (!session || !sessionOwnedBy(session, user)) {
     return c.json(
@@ -1676,6 +1698,19 @@ fsRouter.get("/multipart/status", async (c) => {
     )
   }
   return c.json({ code: 200, message: "success", data: mpSnapshot(session) })
+})
+
+fsRouter.post("/multipart/abort", async (c) => {
+  const user = await getUserFromContext(c)
+  if (!canWrite(user)) return permissionDenied(c)
+  const uploadId = c.req.header("X-Upload-Id") || ""
+  if (isNodeUploadId(uploadId)) return nodeMultipartAbort(c, user, uploadId)
+  const session = uploadId ? getSession(uploadId) : undefined
+  if (!session || !sessionOwnedBy(session, user)) {
+    return c.json({ code: 404, message: "upload session not found", data: null }, 404)
+  }
+  deleteSession(session.upload_id)
+  return c.json({ code: 200, message: "success", data: null })
 })
 
 // ---- 归档（Archive）----
