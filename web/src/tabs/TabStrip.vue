@@ -102,7 +102,8 @@ function onKey(event: KeyboardEvent, id: string) {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex: 0 1 200px;
+  flex: 0 1 auto;
+  width: 200px;
   min-width: 52px;
   height: 32px;
   padding: 0 6px 0 10px;
@@ -117,7 +118,7 @@ function onKey(event: KeyboardEvent, id: string) {
   color: var(--fluent-text);
 }
 .tab--active {
-  flex-basis: 220px;
+  width: 220px;
   min-width: 112px;
   background: var(--fluent-surface);
   color: var(--fluent-text);
