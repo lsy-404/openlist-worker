@@ -193,6 +193,64 @@ export class AListV3Driver implements StorageDriver {
     })
   }
 
+  /** Node identity used to detect when two mounts can copy server-side on the same remote server. */
+  get nodeKey(): string {
+    return `${this.baseUrl}|${this.addition.username || ""}`
+  }
+
+  /** Server-side copy between directories of this node, replacing existing targets. */
+  async serverCopy(srcDir: string, dstDir: string, names: string[]): Promise<void> {
+    await this.request("/fs/copy", "POST", {
+      src_dir: srcDir,
+      dst_dir: dstDir,
+      names,
+      overwrite: true,
+    })
+  }
+
+  /**
+   * Streams an upload of known size; the body is piped through a FixedLengthStream so the
+   * node receives a Content-Length instead of a chunked body.
+   */
+  async putStream(
+    physicalPath: string,
+    body: ReadableStream,
+    size: number,
+    modified?: string,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    const { readable, writable } = new (globalThis as any).FixedLengthStream(size)
+    const piping = body.pipeTo(writable, { signal }).catch(() => {})
+    const mtime = modified ? Date.parse(modified) : NaN
+    const res = await fetch(`${this.baseUrl}/api/fs/put`, {
+      method: "PUT",
+      headers: {
+        Authorization: this.token,
+        "File-Path": encodeURIComponent(physicalPath),
+        "Content-Type": "application/octet-stream",
+        "X-File-Size": String(size),
+        ...(Number.isFinite(mtime) ? { "Last-Modified": String(mtime) } : {}),
+      },
+      body: readable,
+      signal,
+    })
+    await piping
+    const data: AListResp<any> = await res.json().catch(() => ({
+      code: res.status,
+      message: "invalid response",
+      data: null,
+    }))
+    if (data.code === 401 || data.code === 403) {
+      await this.login()
+      throw new Error(`[AListV3] put rejected (code=${data.code}); token refreshed, retry`)
+    }
+    if (data.code !== 200) {
+      throw new Error(
+        `[AListV3] put failed: code=${data.code}, message=${data.message}`,
+      )
+    }
+  }
+
   async put(_v: string, physicalPath: string, content: Uint8Array): Promise<void> {
     const res = await fetch(`${this.baseUrl}/api/fs/put`, {
       method: "PUT",

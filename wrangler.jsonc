@@ -22,6 +22,9 @@
   "workers_dev": false,
   "preview_urls": false,
   "keep_vars": true,
+
+  // 定时目录同步的调度心跳：每分钟检查到期任务并推进进行中的同步（需 D1 绑定，未建任务时空转）。
+  "triggers": { "crons": ["* * * * *"] },
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
