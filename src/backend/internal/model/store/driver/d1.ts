@@ -11,7 +11,8 @@ import {
   buildDdl,
   groupColumns,
   KV_SCHEMA_SQLITE,
-  SQLITE_COLUMNS_SQL,
+  sqliteTableInfoSql,
+  tableInfoRows,
 } from "../schema"
 
 /**
@@ -56,8 +57,12 @@ async function ensureSchema(db: any, env?: any): Promise<void> {
   for (const ddl of [...KV_SCHEMA_SQLITE, ...buildDdl("sqlite", env)]) {
     await db.prepare(ddl).run()
   }
-  const cols = await db.prepare(SQLITE_COLUMNS_SQL).all()
-  for (const ddl of buildAddColumnDdl("sqlite", groupColumns(cols.results || []), env)) {
+  const cols: Array<{ t: string; c: string }> = []
+  for (const { table, sql } of sqliteTableInfoSql(env)) {
+    const info = await db.prepare(sql).all()
+    cols.push(...tableInfoRows(table, info.results || []))
+  }
+  for (const ddl of buildAddColumnDdl("sqlite", groupColumns(cols), env)) {
     await db.prepare(ddl).run()
   }
   d1Inited.set(db, true)

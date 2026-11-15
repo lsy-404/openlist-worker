@@ -18,7 +18,8 @@ import {
   D1_SCHEMA,
   groupColumns,
   KV_SCHEMA_SQLITE,
-  SQLITE_COLUMNS_SQL,
+  sqliteTableInfoSql,
+  tableInfoRows,
 } from "../internal/model/store/schema"
 
 export class OpenListDB {
@@ -40,7 +41,10 @@ export class OpenListDB {
     for (const ddl of [...KV_SCHEMA_SQLITE, ...D1_SCHEMA]) {
       this.sql.exec(ddl)
     }
-    const cols = this.sql.exec(SQLITE_COLUMNS_SQL).toArray()
+    const cols: Array<{ t: string; c: string }> = []
+    for (const { table, sql } of sqliteTableInfoSql()) {
+      cols.push(...tableInfoRows(table, this.sql.exec(sql).toArray()))
+    }
     for (const ddl of buildAddColumnDdl("sqlite", groupColumns(cols))) {
       this.sql.exec(ddl)
     }

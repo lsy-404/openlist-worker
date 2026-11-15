@@ -507,9 +507,13 @@ export function buildAddColumnDdl(
   return out
 }
 
-/** SQLite 列出所有表的现有列（t=表名, c=列名）。 */
-export const SQLITE_COLUMNS_SQL =
-  "SELECT m.name AS t, p.name AS c FROM sqlite_master m, pragma_table_info(m.name) p WHERE m.type = 'table'"
+/** SQLite 各表的列自检语句（D1 / DO 只放行 PRAGMA 语句形式）。 */
+export function sqliteTableInfoSql(env?: any): Array<{ table: string; sql: string }> {
+  return DDL_TABLE_NAMES.map((name) => {
+    const table = tableSqlName(name, env)
+    return { table, sql: `PRAGMA table_info(${quote(table)})` }
+  })
+}
 
 /** MySQL 列出当前库所有表的现有列。 */
 export const MYSQL_COLUMNS_SQL =
@@ -519,6 +523,11 @@ export function groupColumns(rows: Array<{ t: string; c: string }>): Record<stri
   const out: Record<string, Set<string>> = {}
   for (const r of rows) (out[r.t] ??= new Set()).add(r.c)
   return out
+}
+
+/** table_info 结果行 → groupColumns 的输入。 */
+export function tableInfoRows(table: string, rows: any[]): Array<{ t: string; c: string }> {
+  return rows.map((r) => ({ t: table, c: String(r.name) }))
 }
 
 /** 兼容旧导出：SQLite（Cloudflare D1）方言建表语句。 */
