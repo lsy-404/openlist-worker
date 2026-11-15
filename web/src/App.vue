@@ -106,4 +106,18 @@ body {
 a {
   color: var(--fluent-accent-link);
 }
+.fluent-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+/* Icons are rasterised as black images, so they are inverted wherever the text around them is light */
+[data-fluent-theme="dark"] :is(.fluent-svg-icon__paint, .fluent-icon-text__paint) img,
+[data-fluent-theme="light"] :is(.fluent-button--primary, .fluent-button--danger) :is(.fluent-svg-icon__paint, .fluent-icon-text__paint) img {
+  filter: invert(1);
+}
+[data-fluent-theme="dark"] :is(.fluent-button--primary, .fluent-button--danger) :is(.fluent-svg-icon__paint, .fluent-icon-text__paint) img {
+  filter: none;
+}
 </style>
