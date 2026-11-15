@@ -84,8 +84,8 @@ test("ASSET_URLS 含 $version 占位符时不留占位符（取不到版本则 l
   assert.match(location, /\/assets\/app\.js$/)
 })
 
-test("logo / favicon 仍然重定向到官方 logo", async () => {
+test("favicon 重定向到站点 logo", async () => {
   const res = await appWithSpaFallback().request("/favicon.ico", { method: "GET" })
   assert.equal(res.status, 302)
-  assert.equal(res.headers.get("location"), "https://res.oplist.org/logo/logo.svg")
+  assert.equal(res.headers.get("location"), "/logo.svg")
 })

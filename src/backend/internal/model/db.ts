@@ -73,7 +73,7 @@ export const defaultDb = {
     },
     {
       key: "site_title",
-      value: "OpenList",
+      value: "Drive",
       type: "string",
       help: "Site Title",
       group: 1,
@@ -132,7 +132,7 @@ export const defaultDb = {
     // Group 2: STYLE (https://doc.oplist.org/configuration/style)
     {
       key: "logo",
-      value: "https://res.oplist.org/logo/logo.svg",
+      value: "/logo.svg",
       type: "string",
       help: "Site Logo URL",
       group: 2,
@@ -140,7 +140,7 @@ export const defaultDb = {
     },
     {
       key: "favicon",
-      value: "https://res.oplist.org/logo/logo.svg",
+      value: "/logo.svg",
       type: "string",
       help: "Favicon URL",
       group: 2,
@@ -1152,12 +1152,12 @@ export function getEnvCtx(): any | null {
 // ensureDefaultSettings 的「仅补缺失 key」逻辑覆盖，导致 prod 显示旧图标。
 const LEGACY_SETTING_MIGRATIONS: Record<string, { from: any[]; to: string }> = {
   logo: {
-    from: ["", "/logo.png", "https://res.oplist.org/logo/logo.png"],
-    to: "https://res.oplist.org/logo/logo.svg",
+    from: ["", "/logo.png", "https://res.oplist.org/logo/logo.png", "https://res.oplist.org/logo/logo.svg"],
+    to: "/logo.svg",
   },
   favicon: {
-    from: ["", "/favicon.png"],
-    to: "https://res.oplist.org/logo/logo.svg",
+    from: ["", "/favicon.png", "https://res.oplist.org/logo/logo.svg"],
+    to: "/logo.svg",
   },
   // 上游 OpenList 的 home_container 默认是 max_980px（内容限宽 980px 居中），
   // 本项目早期误把默认值设为 hope_container（HopeUI Container 无 maxW，流式全宽），

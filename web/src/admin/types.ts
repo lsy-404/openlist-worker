@@ -1,6 +1,6 @@
 import type { Component } from "vue"
 
-export const adminGroups = ["content", "access", "system"] as const
+export const adminGroups = ["home", "content", "access", "system"] as const
 export type AdminGroup = (typeof adminGroups)[number]
 
 /** Default export of web/src/admin/pages/<name>/index.ts. */

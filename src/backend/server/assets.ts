@@ -12,7 +12,7 @@ import { getDb } from "../internal/model/db"
  * 且始终跟随官方最新 logo（不再内嵌旧 SVG 内容）。
  */
 
-const LOGO_URL = "https://res.oplist.org/logo/logo.svg"
+const LOGO_URL = "/logo.svg"
 
 export const assetsRouter = new Hono()
 
@@ -22,7 +22,6 @@ function redirectToLogo(c: any) {
 
 // 兼容多种路径（settings 或已初始化 DB 可能返回 /logo.png 与 /favicon.png；
 // 浏览器默认请求 /favicon.ico；官方前端 index.html 引用 .svg）。统一重定向。
-assetsRouter.get("/logo.svg", redirectToLogo)
 assetsRouter.get("/logo.png", redirectToLogo)
 assetsRouter.get("/favicon.svg", redirectToLogo)
 assetsRouter.get("/favicon.png", redirectToLogo)

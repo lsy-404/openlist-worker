@@ -22,7 +22,7 @@ const groups = computed(() =>
       <span>{{ t("admin.back") }}</span>
     </RouterLink>
     <section v-for="group in groups" :key="group.id" class="nav__group">
-      <h2 class="nav__heading">{{ t(`admin.groups.${group.id}`) }}</h2>
+      <h2 v-if="group.id !== 'home'" class="nav__heading">{{ t(`admin.groups.${group.id}`) }}</h2>
       <RouterLink
         v-for="page in group.pages"
         :key="page.path"

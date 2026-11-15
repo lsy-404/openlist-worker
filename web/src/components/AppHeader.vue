@@ -158,6 +158,7 @@ function onUser(value: string) {
   }
 }
 @media (max-width: 640px) {
+  .brand__title,
   .header__role,
   .header__admin-text {
     display: none;
