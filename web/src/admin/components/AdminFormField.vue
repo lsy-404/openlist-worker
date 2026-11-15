@@ -44,10 +44,7 @@ const flag = computed({
 <template>
   <div class="form-field">
     <FluentSwitch v-if="kind === 'switch'" v-model="flag" :label="label" :aria-describedby="describedBy" v-bind="$attrs" />
-    <label v-else-if="kind === 'select'" class="form-field__select">
-      <span class="form-field__label">{{ label }}</span>
-      <FluentSelect v-model="text" :label="label" :options="options" :aria-describedby="describedBy" v-bind="$attrs" />
-    </label>
+    <FluentSelect v-else-if="kind === 'select'" v-model="text" :label="label" :options="options" :aria-describedby="describedBy" v-bind="$attrs" />
     <FluentNumberField v-else-if="kind === 'number'" v-model="num" :label="label" :invalid="!!error" :aria-describedby="describedBy" v-bind="$attrs" />
     <FluentPasswordField v-else-if="kind === 'password'" v-model="text" :label="label" :invalid="!!error" :aria-describedby="describedBy" v-bind="$attrs" />
     <FluentTextArea v-else-if="kind === 'textarea'" v-model="text" :label="label" :invalid="!!error" :aria-describedby="describedBy" v-bind="$attrs" />
@@ -62,14 +59,6 @@ const flag = computed({
   display: flex;
   flex-direction: column;
   gap: 4px;
-}
-.form-field__select {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.form-field__label {
-  font-size: 0.85rem;
 }
 .form-field__help,
 .form-field__error {
