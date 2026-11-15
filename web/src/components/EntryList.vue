@@ -203,7 +203,10 @@ function ariaSort(key: SortKey) {
   --cols: minmax(0, 1fr) 150px 130px 84px 40px;
 }
 .head {
-  position: relative;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--fluent-surface);
   display: grid;
   grid-template-columns: var(--cols);
   align-items: center;
