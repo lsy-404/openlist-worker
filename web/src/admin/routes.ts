@@ -10,7 +10,7 @@ export const adminRoute: RouteRecordRaw = {
   },
   meta: { showSidebar: () => isAdmin.value },
   children: [
-    { path: "", redirect: `/@manage/${adminPages[0].path}` },
+    { path: "", redirect: "/@manage/overview" },
     ...adminPages.map((page) => ({ path: page.path, component: page.component, meta: { title: page.title } })),
   ],
 }
