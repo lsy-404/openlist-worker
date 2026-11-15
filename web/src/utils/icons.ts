@@ -122,3 +122,12 @@ export function iconForEntry(entry: { name: string; is_dir: boolean; type: numbe
   if (entry.is_dir) return folder
   return BY_EXTENSION[extension(entry.name)] ?? BY_TYPE[entry.type] ?? document
 }
+
+import appsListDetail from "@fluentui/svg-icons/icons/apps_list_detail_24_regular.svg?raw"
+import arrowRight from "@fluentui/svg-icons/icons/arrow_right_24_regular.svg?raw"
+import chevronDown from "@fluentui/svg-icons/icons/chevron_down_24_regular.svg?raw"
+import clipboardPaste from "@fluentui/svg-icons/icons/clipboard_paste_24_regular.svg?raw"
+import cut from "@fluentui/svg-icons/icons/cut_24_regular.svg?raw"
+import hardDrive from "@fluentui/svg-icons/icons/hard_drive_24_regular.svg?raw"
+
+export const browseIcons = { appsListDetail, arrowRight, chevronDown, clipboardPaste, cut, hardDrive }

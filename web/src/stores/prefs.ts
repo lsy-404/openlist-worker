@@ -3,7 +3,7 @@ import { detectLocale, isLocale, type Locale } from "@/i18n/locales"
 
 export type ThemeMode = "light" | "dark" | "system"
 export type ViewMode = "list" | "grid"
-export type SortKey = "name" | "size" | "modified"
+export type SortKey = "name" | "size" | "modified" | "type"
 export type SortOrder = "asc" | "desc"
 
 interface Prefs {
@@ -12,10 +12,11 @@ interface Prefs {
   view: ViewMode
   sortKey: SortKey
   sortOrder: SortOrder
+  sidebar: { collapsed: string[] }
 }
 
 const STORAGE_KEY = "ui.prefs"
-const defaults: Prefs = { theme: "system", locale: detectLocale(navigator.language), view: "list", sortKey: "name", sortOrder: "asc" }
+const defaults: Prefs = { theme: "system", locale: detectLocale(navigator.language), view: "list", sortKey: "name", sortOrder: "asc", sidebar: { collapsed: [] } }
 
 function load(): Prefs {
   try {

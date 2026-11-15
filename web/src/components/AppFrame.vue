@@ -36,8 +36,9 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey))
         <div v-if="open" class="frame__scrim" aria-hidden="true" @click="open = false" />
       </template>
       <div class="frame__card" :class="{ 'frame__card--flush': !sidebar }">
-        <div v-if="$slots.toolbar" class="frame__toolbar"><slot name="toolbar" /></div>
+        <div id="frame-toolbar" class="frame__toolbar"><slot name="toolbar" /></div>
         <div class="frame__content"><slot /></div>
+        <div id="frame-status" class="frame__status" />
         <AppFooter />
       </div>
     </div>
@@ -82,8 +83,23 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey))
   margin-inline-start: 8px;
 }
 .frame__toolbar {
-  padding: 4px 8px;
+  position: sticky;
+  top: 56px;
+  z-index: 5;
+  background: var(--fluent-surface);
   border-bottom: 1px solid var(--fluent-border);
+  border-radius: calc(var(--fluent-panel-radius) + 4px) calc(var(--fluent-panel-radius) + 4px) 0 0;
+}
+.frame__status {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  background: var(--fluent-surface);
+  border-top: 1px solid var(--fluent-border);
+}
+.frame__toolbar:empty,
+.frame__status:empty {
+  display: none;
 }
 .frame__content {
   flex: 1;

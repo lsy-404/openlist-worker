@@ -1,16 +1,18 @@
 <script setup lang="ts">
 import { ref } from "vue"
 import { FluentButton, FluentMenu, FluentSvgIcon, type FluentMenuItem } from "@platform-kit/fluent/vue"
+import { browseIcons } from "@/utils/icons"
 
 withDefaults(
   defineProps<{
     icon: string
     label: string
     items: readonly FluentMenuItem[]
-    modelValue?: string
+    modelValue?: string | readonly string[]
     text?: string
+    chevron?: boolean
   }>(),
-  { modelValue: undefined, text: undefined },
+  { modelValue: undefined, text: undefined, chevron: false },
 )
 const emit = defineEmits<{ select: [value: string] }>()
 
@@ -22,7 +24,7 @@ const anchor = ref<HTMLElement | null>(null)
   <span ref="anchor" class="menu-button">
     <FluentButton
       tone="subtle"
-      :icon-only="!text"
+      :icon-only="!text && !chevron"
       :aria-label="label"
       :title="label"
       aria-haspopup="menu"
@@ -31,6 +33,7 @@ const anchor = ref<HTMLElement | null>(null)
     >
       <FluentSvgIcon :svg="icon" :size="20" />
       <template v-if="text">{{ text }}</template>
+      <FluentSvgIcon v-if="chevron" :svg="browseIcons.chevronDown" :size="12" />
     </FluentButton>
     <FluentMenu
       v-model:open="open"
