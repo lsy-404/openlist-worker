@@ -547,6 +547,9 @@ publicRouter.get("/settings", async (c) => {
     }
   })
 
+  const guest = (db.users || []).find((u: any) => u.username === "guest")
+  settingsObj["guest_base_path"] = guest && !guest.disabled ? guest.base_path || "/" : "/"
+
   // 注意：不再输出 allow_guest。Go 版没有这个键，匿名访问是否放行完全由
   // guest 账号是否存在/被禁用决定（server/middlewares/auth.go 的 Auth(false)）。
   // 前端也不读取该字段，删掉它是为了和 Go 的公开设置保持一致。

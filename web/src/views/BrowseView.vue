@@ -15,6 +15,7 @@ import { icons } from "@/utils/icons"
 import { encodePath, isReservedPath, normalizePath, parentPath, splitPath } from "@/utils/path"
 import FileView from "./FileView.vue"
 import FolderView from "./FolderView.vue"
+import { findRematch } from "./rematch"
 import { useBrowse } from "./useBrowse"
 
 const { t } = useI18n()
@@ -29,8 +30,22 @@ const { resource, loading, error, locked, wrongPassword, submitting, reload, sub
 const dialogOpen = ref(false)
 watch(locked, (value) => (dialogOpen.value = value), { immediate: true })
 
-const initial = computed(() => loading.value && !resource.value)
-const notFound = computed(() => reserved.value || error.value?.kind === "not-found")
+const rematching = ref(false)
+const initial = computed(() => (loading.value || rematching.value) && !resource.value)
+const notFound = computed(() => !rematching.value && (reserved.value || error.value?.kind === "not-found"))
+
+let rematch: AbortController | null = null
+watch(error, async (value) => {
+  rematch?.abort()
+  rematching.value = false
+  if (value?.kind !== "not-found" || reserved.value) return
+  const current = (rematch = new AbortController())
+  rematching.value = true
+  const target = await findRematch(path.value, current.signal)
+  if (current.signal.aborted) return
+  rematching.value = false
+  if (target) void router.replace(encodePath(target))
+})
 
 watch(
   [path, siteTitle],
