@@ -30,7 +30,7 @@ import {
   type MediaDb,
   type MediaItem,
 } from "../internal/media/model"
-import { isWithinUserRoot } from "../pkg/permission"
+import { isWithinUserRoot, withScopes } from "../pkg/permission"
 import {
   createPlaylist,
   deletePlaylist,
@@ -985,9 +985,10 @@ const parseAuthHeader = (raw: string) => {
 
 async function userFromDb(env: any, id?: number, name?: string) {
   const db = await getDb(env)
-  return (db.users || []).find(
+  const user = (db.users || []).find(
     (u: any) => (id && u.id === id) || (name && u.username === name && !u.disabled),
   )
+  return user ? withScopes(user, db.groups) : user
 }
 
 /** 常量时间比较，避免按前缀命中后通过比较耗时泄露密钥内容 */

@@ -1,7 +1,13 @@
 import { Hono } from "hono"
 import { getDb, saveDb } from "../internal/model/db"
 import { adminAuthMiddleware, getUserFromContext } from "./middlewares"
-import { can, PermissionBit, isAdmin, getActualPath } from "../pkg/permission"
+import {
+  can,
+  canInAnyScope,
+  PermissionBit,
+  isAdmin,
+  getActualPath,
+} from "../pkg/permission"
 
 export const shareRouter = new Hono()
 
@@ -53,7 +59,7 @@ shareRouter.post("/create", async (c) => {
   }
 
   // 检查分享权限位
-  if (!isAdmin(user) && !can(user, PermissionBit.SHARE)) {
+  if (!isAdmin(user) && !canInAnyScope(user, PermissionBit.SHARE)) {
     return c.json({ code: 403, message: "Permission denied", data: null }, 403)
   }
 
@@ -66,7 +72,12 @@ shareRouter.post("/create", async (c) => {
     try {
       files = body.files.map((f: string) => {
         const clean = sanitizePath(String(f))
-        return isAdmin(user) ? clean : getActualPath(user, clean)
+        if (isAdmin(user)) return clean
+        const actual = getActualPath(user, clean)
+        if (!can(user, PermissionBit.SHARE, actual)) {
+          throw new Error("Permission denied")
+        }
+        return actual
       })
     } catch (err: any) {
       return c.json(

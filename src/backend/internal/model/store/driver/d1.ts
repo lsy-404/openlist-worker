@@ -6,7 +6,13 @@
  * - OPENLIST_DB (别名)
  */
 import type { Driver } from "../types"
-import { buildDdl, KV_SCHEMA_SQLITE } from "../schema"
+import {
+  buildAddColumnDdl,
+  buildDdl,
+  groupColumns,
+  KV_SCHEMA_SQLITE,
+  SQLITE_COLUMNS_SQL,
+} from "../schema"
 
 /**
  * 判断对象是否具备 D1 绑定接口形态。
@@ -48,6 +54,10 @@ async function ensureSchema(db: any, env?: any): Promise<void> {
   if (d1Inited.get(db)) return
   // KV 表（map/key 格式）+ 列式表（sql 格式）一并创建
   for (const ddl of [...KV_SCHEMA_SQLITE, ...buildDdl("sqlite", env)]) {
+    await db.prepare(ddl).run()
+  }
+  const cols = await db.prepare(SQLITE_COLUMNS_SQL).all()
+  for (const ddl of buildAddColumnDdl("sqlite", groupColumns(cols.results || []), env)) {
     await db.prepare(ddl).run()
   }
   d1Inited.set(db, true)

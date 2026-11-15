@@ -8,6 +8,13 @@ import { listUserSshKeys, deleteUserSshKey } from "../internal/op/sshkey"
 
 export const userRouter = new Hono()
 
+/** 只保留库中真实存在的用户组 id。 */
+const knownGroupIds = (db: any, raw: unknown): number[] => {
+  if (!Array.isArray(raw)) return []
+  const ids = new Set((db.groups || []).map((g: any) => g.id))
+  return [...new Set(raw.map((v) => Number(v)))].filter((id) => ids.has(id))
+}
+
 // GET /api/admin/user/list
 userRouter.get("/list", async (c) => {
   const db = await getDb(c.env)
@@ -20,6 +27,8 @@ userRouter.get("/list", async (c) => {
     disabled: !!u.disabled,
     sso_id: u.sso_id || "",
     allow_ldap: !!u.allow_ldap,
+    groups: u.groups || [],
+    sso_groups: u.sso_groups || [],
     pwd_update_at: u.pwd_update_at || "",
     otp: !!u.otp_secret,
   }))
@@ -63,6 +72,8 @@ userRouter.get("/get", async (c) => {
       disabled: !!user.disabled,
       sso_id: user.sso_id || "",
       allow_ldap: !!user.allow_ldap,
+      groups: user.groups || [],
+      sso_groups: user.sso_groups || [],
       otp: !!user.otp_secret,
     },
   })
@@ -122,6 +133,8 @@ userRouter.post("/create", async (c) => {
     disabled: !!body.disabled,
     sso_id: body.sso_id || "",
     allow_ldap: !!body.allow_ldap,
+    groups: knownGroupIds(db, body.groups),
+    sso_groups: [],
     pwd_update_at: new Date().toISOString(),
   }
 
@@ -192,6 +205,7 @@ userRouter.post("/update", async (c) => {
   if (body.disabled !== undefined) user.disabled = !!body.disabled
   if (body.sso_id !== undefined) user.sso_id = body.sso_id
   if (body.allow_ldap !== undefined) user.allow_ldap = !!body.allow_ldap
+  if (body.groups !== undefined) user.groups = knownGroupIds(db, body.groups)
 
   db.users[userIdx] = user
   await saveDb(db, c.env)

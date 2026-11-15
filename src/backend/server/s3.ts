@@ -15,6 +15,8 @@ import {
   getActualPath,
   isAdmin,
   isWithinUserRoot,
+  filterByScope,
+  withScopes,
 } from "../pkg/permission"
 import {
   canAccess,
@@ -111,7 +113,7 @@ function outOfScope(c: any) {
 
 async function authUser(c: any): Promise<any | null> {
   const auth = await authUserFromReq(c)
-  return auth ? auth.user : null
+  return auth ? withScopes(auth.user, auth.db.groups) : null
 }
 
 /**
@@ -157,7 +159,7 @@ async function metaWriteDenied(
   const meta = await loadMeta(c, path)
   if (!meta) return false
   if (isAdmin(user)) return false
-  if (!canWrite(user) && !canWriteContentBypassUserPerms(meta, path)) {
+  if (!canWrite(user, path) && !canWriteContentBypassUserPerms(meta, path)) {
     return true
   }
   return !canWriteMeta(user, meta, path)
@@ -180,8 +182,11 @@ s3Router.get("/", async (c) => {
   if (!user) return s3Error("AccessDenied", "Authentication required", 403)
   try {
     // 仅列出用户根目录之下的「bucket」——受限 base_path 的用户不应看到整站挂载点
-    const res = await listItems(getActualPath(user, "/"), getCtx(c))
-    const buckets = (res.content || [])
+    const root = getActualPath(user, "/")
+    const res = await listItems(root, getCtx(c))
+    const visible = filterByScope(user, root, res.content || [])
+    if (!visible) return outOfScope(c)
+    const buckets = visible
       .filter((it: any) => it.is_dir)
       .map(
         (it: any) =>
@@ -269,15 +274,15 @@ s3Router.put("/*", async (c) => {
   if (!user) return s3Error("AccessDenied", "Authentication required", 403)
   // 写操作必须持有 WRITE_CONTENT 权限位（管理员放行）。
   // 历史缺陷：只判断「是否登录」，任何已认证用户（含只读用户）都能上传。
-  if (!canWrite(user)) {
-    return s3Error("AccessDenied", "Write permission required", 403)
-  }
   const { bucket, key } = parseS3Path(c)
   if (!isValidS3Bucket(bucket) || !key) {
     return s3Error("InvalidArgument", "Invalid bucket/key", 400)
   }
   const virtualPath = s3VirtualPath(user, bucket, key)
   if (!isWithinUserRoot(user, virtualPath)) return outOfScope(c)
+  if (!canWrite(user, virtualPath)) {
+    return s3Error("AccessDenied", "Write permission required", 403)
+  }
   // 目录级写判定（对齐 /api/fs/put 的 meta.write_users 与 write_content_bypass）
   const parentDir =
     virtualPath.lastIndexOf("/") > 0
@@ -318,15 +323,15 @@ s3Router.delete("/*", async (c) => {
   const user = await authUser(c)
   if (!user) return s3Error("AccessDenied", "Authentication required", 403)
   // 删除操作必须持有 DELETE 权限位（管理员放行）。
-  if (!canRemove(user)) {
-    return s3Error("AccessDenied", "Delete permission required", 403)
-  }
   const { bucket, key } = parseS3Path(c)
   if (!isValidS3Bucket(bucket) || !key) {
     return s3Error("InvalidArgument", "Invalid bucket/key", 400)
   }
   const virtualPath = s3VirtualPath(user, bucket, key)
   if (!isWithinUserRoot(user, virtualPath)) return outOfScope(c)
+  if (!canRemove(user, virtualPath)) {
+    return s3Error("AccessDenied", "Delete permission required", 403)
+  }
   // 目录级写判定（对齐 /api/fs/remove 的 meta.write_users）
   if (await metaWriteDenied(c, user, virtualPath)) {
     return s3Error("AccessDenied", "Write permission denied for this path", 403)

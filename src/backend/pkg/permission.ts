@@ -23,6 +23,11 @@ export const PermissionBit = {
   CUSTOMIZE_SHARE_ID: 15, // 1 << 15 = 32768
 } as const
 
+export interface PermissionScope {
+  path: string
+  permission: number
+}
+
 export interface UserPermissionObj {
   id?: number
   username?: string
@@ -30,6 +35,91 @@ export interface UserPermissionObj {
   permission: number
   disabled?: boolean
   base_path?: string
+  scopes?: PermissionScope[]
+}
+
+export interface GroupLike {
+  id: number
+  name: string
+  scopes?: PermissionScope[]
+}
+
+/** 用户的有效用户组：管理员分配的 id 命中，或身份提供方上报的组名命中。 */
+export function effectiveGroups<G extends GroupLike>(
+  user: { groups?: number[]; sso_groups?: string[] } | null | undefined,
+  groups: G[] | null | undefined,
+): G[] {
+  const ids = new Set(user?.groups || [])
+  const names = new Set(user?.sso_groups || [])
+  return (groups || []).filter((g) => ids.has(g.id) || names.has(g.name))
+}
+
+export function effectiveScopes(
+  user: { groups?: number[]; sso_groups?: string[] } | null | undefined,
+  groups: GroupLike[] | null | undefined,
+): PermissionScope[] {
+  return effectiveGroups(user, groups).flatMap((g) =>
+    (g.scopes || []).map((s) => ({
+      path: normalizeSegments(s.path),
+      permission: s.permission | 0,
+    })),
+  )
+}
+
+/** 返回附带有效 scopes 的用户副本（不改动持久化对象）。 */
+export function withScopes<U extends { groups?: number[]; sso_groups?: string[] }>(
+  user: U,
+  groups: GroupLike[] | null | undefined,
+): U & { scopes: PermissionScope[] } {
+  return { ...user, scopes: effectiveScopes(user, groups) }
+}
+
+export type ScopeLevel = "none" | "ancestor" | "granted"
+
+const scopeCovers = (scope: string, p: string): boolean =>
+  scope === "/" || p === scope || p.startsWith(scope + "/")
+
+/**
+ * 通用用户对某个实际路径的访问级别与该路径上的权限位：
+ * 被某个 scope 覆盖为 granted（权限位 = 用户自身位 | 所有覆盖 scope 的位），
+ * 仅是某个 scope 的祖先目录为 ancestor（只读导航、无权限位），其余 none。
+ * 管理员 / 访客 / 未登录保持原语义：恒为 granted，位取自用户自身。
+ */
+export function scopeAccess(
+  user: UserPermissionObj | null | undefined,
+  realPath: string,
+): { level: ScopeLevel; permission: number } {
+  if (!isGeneral(user)) return { level: "granted", permission: user?.permission ?? 0 }
+  const p = normalizeSegments(realPath)
+  let bits = 0
+  let covered = false
+  let ancestor = false
+  for (const s of user!.scopes || []) {
+    if (scopeCovers(s.path, p)) {
+      covered = true
+      bits |= s.permission
+    } else if (p === "/" || s.path.startsWith(p + "/")) {
+      ancestor = true
+    }
+  }
+  if (covered) return { level: "granted", permission: (user!.permission | bits) >>> 0 }
+  return { level: ancestor ? "ancestor" : "none", permission: 0 }
+}
+
+/** ancestor 目录下应当可见的子项名：通向或就是某个 scope 路径的下一段。 */
+export function scopeChildNames(
+  user: UserPermissionObj | null | undefined,
+  realPath: string,
+): Set<string> {
+  const p = normalizeSegments(realPath)
+  const prefix = p === "/" ? "/" : p + "/"
+  const out = new Set<string>()
+  for (const s of user?.scopes || []) {
+    if (s.path.startsWith(prefix) && s.path.length > prefix.length) {
+      out.add(s.path.slice(prefix.length).split("/")[0])
+    }
+  }
+  return out
 }
 
 export function isGuest(user?: UserPermissionObj | null): boolean {
@@ -47,36 +137,73 @@ export function isGeneral(user?: UserPermissionObj | null): boolean {
 export function can(
   user: UserPermissionObj | null | undefined,
   bitIndex: number,
+  realPath?: string,
 ): boolean {
   if (!user) return false
   if (user.disabled) return false
   if (isAdmin(user)) return true
   if (isGuest(user)) return false
-  return ((user.permission >> bitIndex) & 1) === 1
+  if (realPath === undefined) return ((user.permission >> bitIndex) & 1) === 1
+  const access = scopeAccess(user, realPath)
+  return access.level === "granted" && ((access.permission >> bitIndex) & 1) === 1
 }
 
-export function canSeeHides(user?: UserPermissionObj | null): boolean {
-  return can(user, PermissionBit.SEE_HIDES)
+export function canSeeHides(
+  user?: UserPermissionObj | null,
+  realPath?: string,
+): boolean {
+  return can(user, PermissionBit.SEE_HIDES, realPath)
 }
 
-export function canWrite(user?: UserPermissionObj | null): boolean {
-  return can(user, PermissionBit.WRITE_CONTENT)
+export function canWrite(
+  user?: UserPermissionObj | null,
+  realPath?: string,
+): boolean {
+  return can(user, PermissionBit.WRITE_CONTENT, realPath)
 }
 
-export function canRename(user?: UserPermissionObj | null): boolean {
-  return can(user, PermissionBit.RENAME)
+export function canRename(
+  user?: UserPermissionObj | null,
+  realPath?: string,
+): boolean {
+  return can(user, PermissionBit.RENAME, realPath)
 }
 
-export function canMove(user?: UserPermissionObj | null): boolean {
-  return can(user, PermissionBit.MOVE)
+export function canMove(
+  user?: UserPermissionObj | null,
+  realPath?: string,
+): boolean {
+  return can(user, PermissionBit.MOVE, realPath)
 }
 
-export function canCopy(user?: UserPermissionObj | null): boolean {
-  return can(user, PermissionBit.COPY)
+export function canCopy(
+  user?: UserPermissionObj | null,
+  realPath?: string,
+): boolean {
+  return can(user, PermissionBit.COPY, realPath)
 }
 
-export function canRemove(user?: UserPermissionObj | null): boolean {
-  return can(user, PermissionBit.DELETE)
+export function canRemove(
+  user?: UserPermissionObj | null,
+  realPath?: string,
+): boolean {
+  return can(user, PermissionBit.DELETE, realPath)
+}
+
+/**
+ * 按用户的 scope 过滤某目录的列表项：granted 原样返回，ancestor 只留通向 scope 的子目录，
+ * none 返回 null（调用方应拒绝）。
+ */
+export function filterByScope<T extends { name: string; is_dir?: boolean }>(
+  user: UserPermissionObj | null | undefined,
+  realPath: string,
+  items: T[],
+): T[] | null {
+  const { level } = scopeAccess(user, realPath)
+  if (level === "none") return null
+  if (level === "granted") return items
+  const names = scopeChildNames(user, realPath)
+  return items.filter((it) => it.is_dir !== false && names.has(it.name))
 }
 
 /**
@@ -149,8 +276,27 @@ export function isWithinUserRoot(
   user: UserPermissionObj | null | undefined,
   actualPath: string,
 ): boolean {
+  if (!isWithinBasePath(user, actualPath)) return false
+  return scopeAccess(user, actualPath).level === "granted"
+}
+
+/** 仅按 base_path 判断路径是否在用户根目录之内（不含用户组 scope）。 */
+export function isWithinBasePath(
+  user: UserPermissionObj | null | undefined,
+  actualPath: string,
+): boolean {
   const root = getActualPath(user, "/")
   const target = normalizeSegments(actualPath)
-  if (root === "/") return true
-  return target === root || target.startsWith(root + "/")
+  return root === "/" || target === root || target.startsWith(root + "/")
+}
+
+/** 通用用户是否在任一 scope 内持有该权限位（用于 ancestor 目录的导航判定）。 */
+export function canInAnyScope(
+  user: UserPermissionObj | null | undefined,
+  bitIndex: number,
+): boolean {
+  if (!isGeneral(user) || user!.disabled) return can(user, bitIndex)
+  return (user!.scopes || []).some(
+    (s) => (((user!.permission | s.permission) >> bitIndex) & 1) === 1,
+  )
 }

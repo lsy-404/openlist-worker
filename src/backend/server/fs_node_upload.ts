@@ -2,7 +2,7 @@ import { flushPendingDriverState, getDriver } from "../internal/op/storage"
 import { resolvePath } from "../internal/model/db"
 import { NodeUploadError } from "../drivers/alist_v3/driver"
 import { hmacSha256 } from "../pkg/crypto"
-import { getActualPath } from "../pkg/permission"
+import { can, getActualPath, PermissionBit } from "../pkg/permission"
 import { getUploadSizeLimit, tooLargeResponse } from "../pkg/upload-limit"
 import { getJwtSecret } from "./middlewares"
 
@@ -54,7 +54,9 @@ async function open(c: any, id: string, user: any): Promise<NodeUploadRef | null
 }
 
 async function nodeDriver(user: any, ref: NodeUploadRef) {
-  const resolved = await resolvePath(getActualPath(user, ref.d))
+  const real = getActualPath(user, ref.d)
+  if (!can(user, PermissionBit.WRITE_CONTENT, real)) throw new Error("Permission denied")
+  const resolved = await resolvePath(real)
   if (resolved.isVirtual || !resolved.storage) throw new Error("failed get storage: storage not found")
   const driver = (await getDriver(resolved.storage.driver, resolved.storage)) as any
   if (typeof driver.multipartChunk !== "function") throw new Error("storage does not support chunked upload")

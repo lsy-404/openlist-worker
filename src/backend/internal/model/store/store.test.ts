@@ -187,13 +187,14 @@ const SAMPLE_DB = {
   shares: [],
   metas: [{ id: 1, path: "/a", read_users: [1, 2], read_users_sub: false }],
   plugins: [],
+  groups: [],
 }
 
 test("schema: columnar tables match Go backend structure", () => {
-  // 往返表 6 张（sshkeys 不参与，避免清空 Go 的 x_ssh_public_keys）
-  assert.equal(TABLE_NAMES.length, 6)
-  // DDL 表 7 张（含 sshkeys，保持与 Go 共享库的结构一致）
-  assert.equal(DDL_TABLE_NAMES.length, 7)
+  // 往返表 7 张（sshkeys 不参与，避免清空 Go 的 x_ssh_public_keys）
+  assert.equal(TABLE_NAMES.length, 7)
+  // DDL 表 8 张（含 sshkeys，保持与 Go 共享库的结构一致）
+  assert.equal(DDL_TABLE_NAMES.length, 8)
   assert.equal(TABLE_KEY.settings, "key")
   assert.equal(TABLE_KEY.users, "id")
   assert.equal(keyOf("settings", { key: "site_title" }), "site_title")

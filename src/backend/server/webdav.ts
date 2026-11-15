@@ -17,6 +17,11 @@ import {
   isAdmin,
   isGuest,
   isWithinUserRoot,
+  isWithinBasePath,
+  scopeAccess,
+  canInAnyScope,
+  filterByScope,
+  withScopes,
   PermissionBit,
 } from "../pkg/permission"
 import {
@@ -86,18 +91,19 @@ async function webdavAuth(
       if (idx < 0) return null
       const username = decoded.substring(0, idx)
       const password = decoded.substring(idx + 1)
-      const { users } = await getOrInitUsers(c.env)
+      const { db, users } = await getOrInitUsers(c.env)
       const user = users.find(
         (u: any) => u.username === username && !u.disabled,
       )
       if (!user) return null
+      const scoped = withScopes(user, db.groups)
       // 空密码用户（guest）：Basic Auth 下若未提供密码则允许（与 AList 一致）
       if (!user.password) {
         if (password !== "") return null
-        return { user, metaPassword: isGuest(user) ? password : "" }
+        return { user: scoped, metaPassword: isGuest(user) ? password : "" }
       }
       if (await verifyUserPassword(user, password)) {
-        return { user, metaPassword: isGuest(user) ? password : "" }
+        return { user: scoped, metaPassword: isGuest(user) ? password : "" }
       }
       return null
     } catch {
@@ -106,7 +112,9 @@ async function webdavAuth(
   }
   if (authHeader.startsWith("Bearer ")) {
     const auth = await authUserFromReq(c)
-    return auth ? { user: auth.user, metaPassword: "" } : null
+    return auth
+      ? { user: withScopes(auth.user, auth.db.groups), metaPassword: "" }
+      : null
   }
   return null
 }
@@ -237,7 +245,7 @@ async function deniedByMetaWrite(
   if (isAdmin(user)) return false
   if (
     requireContentPerm &&
-    !canWrite(user) &&
+    !canWrite(user, path) &&
     !canWriteContentBypassUserPerms(meta, path)
   ) {
     return true
@@ -322,17 +330,25 @@ webdavRouter.all("/*", async (c) => {
     await clearLoginFailures(c, basicUsername, c.env)
   }
   const { user, metaPassword } = auth
-  const canRead = can(user, PermissionBit.WEBDAV_READ)
-  const canManage = can(user, PermissionBit.WEBDAV_MANAGE)
-  if (!canRead && !canManage) {
-    return c.text("Forbidden", 403)
-  }
-
   // davPath 是**客户端可见**路径（用于 href，不能把实际存储路径回显给客户端）；
   // actualPath 才是交给存储层的路径（已套用该用户的根目录）。
   const davPath = davPathOf(c)
   const actualPath = scopedDavPath(user, davPath)
-  if (!isWithinUserRoot(user, actualPath)) return c.text("Forbidden", 403)
+  if (!isWithinBasePath(user, actualPath)) return c.text("Forbidden", 403)
+  const access = scopeAccess(user, actualPath)
+  // ancestor 目录只允许 PROPFIND 导航，且读权限取自任一 scope
+  const navigating = access.level === "ancestor" && method === "PROPFIND"
+  if (access.level === "none" || (access.level === "ancestor" && !navigating)) {
+    return c.text("Forbidden", 403)
+  }
+  const canRead = navigating
+    ? canInAnyScope(user, PermissionBit.WEBDAV_READ)
+    : can(user, PermissionBit.WEBDAV_READ, actualPath)
+  const canManage =
+    !navigating && can(user, PermissionBit.WEBDAV_MANAGE, actualPath)
+  if (!canRead && !canManage) {
+    return c.text("Forbidden", 403)
+  }
   const ctx = getStorageRequestContext(c)
 
   try {
@@ -345,7 +361,9 @@ webdavRouter.all("/*", async (c) => {
         }
         const depth = c.req.header("Depth") || "1"
         const res = await listItems(actualPath, ctx)
-        const items = (res.content || []).map((it: any) => ({
+        const visible = filterByScope(user, actualPath, res.content || [])
+        if (!visible) return c.text("Forbidden", 403)
+        const items = visible.map((it: any) => ({
           name: it.name,
           size: it.size || 0,
           isFolder: !!it.is_dir,
@@ -433,10 +451,13 @@ webdavRouter.all("/*", async (c) => {
         const dst = splitPath(dest)
         // 对齐 Go webdav/file.go moveFiles：跨目录需要 MOVE 权限位、
         // 改名需要 RENAME 权限位；源/目标目录均需通过 meta 写判定
-        if (src.dir !== dst.dir && !canMove(user)) {
+        if (
+          src.dir !== dst.dir &&
+          !(canMove(user, actualPath) && canMove(user, dest))
+        ) {
           return c.text("Forbidden", 403)
         }
-        if (src.name !== dst.name && !canRename(user)) {
+        if (src.name !== dst.name && !canRename(user, actualPath)) {
           return c.text("Forbidden", 403)
         }
         if (
@@ -459,7 +480,9 @@ webdavRouter.all("/*", async (c) => {
         const dst = splitPath(dest)
         // 对齐 Go webdav/file.go copyFiles：COPY 权限位 + 源目录可读
         // （read_users 白名单）+ 目标目录 meta 写判定
-        if (!canCopy(user)) return c.text("Forbidden", 403)
+        if (!(canCopy(user, actualPath) && canCopy(user, dest))) {
+          return c.text("Forbidden", 403)
+        }
         let srcMeta: Meta | null = null
         try {
           srcMeta = await getNearestMeta(src.dir, c.env)

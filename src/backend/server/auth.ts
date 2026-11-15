@@ -28,6 +28,7 @@ import {
   passwordStampOf,
   isPasswordStampValid,
 } from "../pkg/password"
+import { effectiveGroups } from "../pkg/permission"
 import { setCSRFToken, clearCSRFToken } from "../pkg/csrf"
 import { getAuditLogger } from "../pkg/audit"
 
@@ -681,6 +682,13 @@ export const meHandler = async (c: any) => {
       401,
     )
   }
+  const db = await getDb(c.env)
+
+  const record = (db.users || []).find((u: any) => u.id === user.id)
+  const groups = effectiveGroups(record, db.groups).map((g) => ({
+    id: g.id,
+    name: g.name,
+  }))
 
   return c.json({
     code: 200,
@@ -695,6 +703,7 @@ export const meHandler = async (c: any) => {
       sso_id: user.sso_id || "",
       allow_ldap: !!user.allow_ldap,
       otp: !!user.otp_secret,
+      groups,
     },
   })
 }

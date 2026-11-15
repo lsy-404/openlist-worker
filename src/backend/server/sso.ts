@@ -294,8 +294,20 @@ async function generateToken(user: any, c: any): Promise<string> {
   return await sign(payload, secret)
 }
 
+/** 取 id_token 中的组声明：字符串数组，或单个字符串。 */
+function groupsFromClaim(claims: any, claim: string): string[] {
+  const raw = claims?.[claim]
+  const list = Array.isArray(raw) ? raw : typeof raw === "string" ? [raw] : []
+  return [...new Set(list.filter((g: unknown) => typeof g === "string" && g).map(String))]
+}
+
 /** SSO 自动注册 */
-async function autoRegister(db: any, username: string, ssoId: string): Promise<any> {
+async function autoRegister(
+  db: any,
+  username: string,
+  ssoId: string,
+  ssoGroups: string[] | undefined,
+): Promise<any> {
   let uname = username || ssoId
   if (db.users.some((u: any) => u.username === uname)) {
     uname = `${uname}_${ssoId}`
@@ -313,6 +325,8 @@ async function autoRegister(db: any, username: string, ssoId: string): Promise<a
     disabled: false,
     sso_id: ssoId,
     allow_ldap: false,
+    groups: [],
+    sso_groups: ssoGroups ?? [],
     pwd_update_at: new Date().toISOString(),
   }
   // SSO 用户不通过本地口令登录，但仍以双层哈希存储随机口令，避免存明文
@@ -427,6 +441,7 @@ async function handleCallback(c: any, method: string) {
     let scope: string
     let accessToken: string
     let userInfo: any
+    let ssoGroups: string[] | undefined
 
     if (platform === "OIDC") {
       const ep = await oidcDiscovery(discoveryUrl || ssoLoginUrl)
@@ -469,6 +484,7 @@ async function handleCallback(c: any, method: string) {
       }
       const claims = await verifyIdToken(tokenData.id_token, ep, clientId, flow.nonce)
       accessToken = tokenData.access_token || ""
+      ssoGroups = groupsFromClaim(claims, getSetting(db, "sso_group_claim", "groups") || "groups")
       userInfo = { sub: claims.sub, name: claims.preferred_username || claims.name || "" }
       if (userUrl && accessToken && !userInfo.name) {
         const uResp = await fetch(userUrl, {
@@ -555,10 +571,18 @@ async function handleCallback(c: any, method: string) {
     if (!user) {
       const autoReg = getBool(db, "sso_auto_register")
       if (!autoReg) {
+        if (useCompat) return c.redirect(`${apiOrigin(c)}/@login?error=sso_denied`, 302)
         return c.text("user not found and auto register is disabled", 400)
       }
       const username = String(userInfo?.login ?? userInfo?.[usernameField] ?? userInfo?.name ?? "")
-      user = await autoRegister(db, username || userID, userID)
+      user = await autoRegister(db, username || userID, userID, ssoGroups)
+    } else if (
+      ssoGroups &&
+      user.role !== 2 &&
+      JSON.stringify(user.sso_groups || []) !== JSON.stringify(ssoGroups)
+    ) {
+      user.sso_groups = ssoGroups
+      await saveDb(db, c.env)
     }
     const token = await generateToken(user, c)
     if (useCompat) {
