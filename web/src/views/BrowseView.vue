@@ -10,7 +10,7 @@ import { syncFolder } from "@/browse/tree"
 import { useShortcuts } from "@/browse/useShortcuts"
 import PasswordDialog from "@/components/PasswordDialog.vue"
 import StateMessage from "@/components/StateMessage.vue"
-import { isAdmin, isGuest, session, siteTitle } from "@/stores/session"
+import { siteTitle } from "@/stores/session"
 import { icons } from "@/utils/icons"
 import { encodePath, isReservedPath, normalizePath, parentPath, splitPath } from "@/utils/path"
 import FileView from "./FileView.vue"
@@ -25,18 +25,10 @@ const router = useRouter()
 const path = computed(() => normalizePath([route.params.pathMatch].flat().join("/")))
 const reserved = computed(() => isReservedPath(path.value))
 
-const { resource, loading, error, locked, wrongPassword, submitting, reload, submitPassword } = useBrowse(path)
+const { resource, loading, error, locked, noAccess, wrongPassword, submitting, reload, submitPassword } = useBrowse(path)
 
 const dialogOpen = ref(false)
 watch(locked, (value) => (dialogOpen.value = value), { immediate: true })
-
-const noAccess = computed(
-  () =>
-    error.value?.kind === "forbidden" &&
-    !isGuest.value &&
-    !isAdmin.value &&
-    !((session.user as { groups?: unknown[] } | null)?.groups?.length ?? 0),
-)
 
 const rematching = ref(false)
 const initial = computed(() => (loading.value || rematching.value) && !resource.value)
