@@ -7,6 +7,7 @@ export default {
   header: {
     login: "登录",
     account: "账户",
+    groups: "身份组",
     logout: "退出登录",
     language: "语言",
     toggleTheme: "切换浅色/深色主题",

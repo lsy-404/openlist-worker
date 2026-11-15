@@ -31,7 +31,7 @@ watch(
   --tok-attr: #0b6a8a;
   margin: 0;
   padding: 12px 14px;
-  max-height: 75vh;
+  max-height: 75dvh;
   overflow: auto;
   font: 13px/1.6 "Cascadia Mono", Consolas, ui-monospace, monospace;
   tab-size: 4;

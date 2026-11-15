@@ -69,7 +69,7 @@ onBeforeUnmount(() => viewer?.destroy())
 
 <style scoped>
 .stage {
-  height: clamp(280px, 70vh, 800px);
+  height: clamp(280px, 70dvh, 800px);
   background: #000;
 }
 .stage__video {

@@ -86,8 +86,14 @@ async function retry() {
 <style>
 html,
 body {
+  height: 100%;
   margin: 0;
+  overflow: hidden;
   background: var(--fluent-bg);
+}
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--fluent-muted) transparent;
 }
 body {
   color: var(--fluent-text);
@@ -97,8 +103,9 @@ body {
 .app {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
-  min-height: 100dvh;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
   background: var(--fluent-bg);
 }
 a {
@@ -134,6 +141,25 @@ a {
   from {
     opacity: 0;
     transform: translateY(var(--motion-rise));
+  }
+}
+.flyout-motion.fluent-popover[data-fluent-menu-motion] {
+  transform-origin: top;
+  animation: flyout-in var(--fluent-fast) var(--fluent-ease);
+}
+.flyout-motion.flyout-motion--closing.fluent-popover[data-fluent-menu-motion] {
+  animation: flyout-out var(--fluent-faster) var(--fluent-ease-accelerate) forwards;
+}
+@keyframes flyout-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+@keyframes flyout-out {
+  to {
+    opacity: 0;
+    transform: translateY(-8px);
   }
 }
 .fluent-dialog {

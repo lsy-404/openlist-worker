@@ -172,7 +172,7 @@ watch(() => props.path, () => void load(), { immediate: true })
 .list {
   margin: 0;
   padding: 0;
-  max-height: 70vh;
+  max-height: 70dvh;
   overflow: auto;
   list-style: none;
 }

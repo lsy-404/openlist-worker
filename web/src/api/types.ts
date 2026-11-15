@@ -54,4 +54,5 @@ export interface UserInfo {
   permission: number
   base_path: string
   disabled?: boolean
+  groups?: { id: number; name: string }[]
 }

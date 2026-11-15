@@ -70,7 +70,7 @@ const showRendered = computed(() => markdown.value && mode.value === "rendered")
 <style scoped>
 .text__markdown {
   padding: 16px 20px;
-  max-height: 80vh;
+  max-height: 80dvh;
   overflow: auto;
 }
 </style>

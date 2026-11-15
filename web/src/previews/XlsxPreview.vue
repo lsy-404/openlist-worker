@@ -97,7 +97,7 @@ function show(cell: Cell): string {
 
 <style scoped>
 .sheet {
-  max-height: 72vh;
+  max-height: 72dvh;
   overflow: auto;
 }
 table {

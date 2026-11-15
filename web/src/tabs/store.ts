@@ -1,5 +1,6 @@
 import { computed, reactive } from "vue"
 import { START_LOCATION, type Router } from "vue-router"
+import { restoreScroll, scrollOffset, scrollToTop } from "./scroll"
 
 export interface Tab {
   id: string
@@ -63,6 +64,18 @@ export function singletonOf(location: string): string | null {
   return SINGLETONS.find((s) => path === s || path.startsWith(s + "/")) ?? null
 }
 
+const offsets = new Map<string, number>()
+const offsetKey = (tab: Tab) => `${tab.id}:${tab.index}`
+
+function rememberOffset() {
+  const tab = activeTab.value
+  if (tab) offsets.set(offsetKey(tab), scrollOffset())
+}
+
+function forgetOffsets(tabId: string) {
+  for (const key of offsets.keys()) if (key.startsWith(`${tabId}:`)) offsets.delete(key)
+}
+
 let router: Router
 // Set while the store itself drives the router, so its guards stay out of the way
 let internal = false
@@ -82,12 +95,14 @@ async function show(tab: Tab) {
   } finally {
     internal = false
   }
+  restoreScroll(offsets.get(offsetKey(tab)) ?? 0)
   save()
 }
 
 export function activateTab(id: string) {
   const tab = state.tabs.find((t) => t.id === id)
   if (!tab || state.active === id) return
+  rememberOffset()
   state.active = id
   save()
   void show(tab)
@@ -103,6 +118,7 @@ export function openTab(location: string, activate = true) {
   }
   const tab = create(location)
   if (activate) {
+    rememberOffset()
     state.active = tab.id
     void show(tab)
   }
@@ -114,6 +130,7 @@ export function closeTab(id: string) {
   if (index < 0) return
   const wasActive = state.active === id
   state.tabs.splice(index, 1)
+  forgetOffsets(id)
   if (!state.tabs.length) {
     openTab("/")
     return
@@ -129,6 +146,7 @@ export function closeTab(id: string) {
 function go(delta: number) {
   const tab = activeTab.value
   if (!tab || tab.index + delta < 0 || tab.index + delta >= tab.history.length) return
+  rememberOffset()
   tab.index += delta
   void show(tab)
 }
@@ -160,9 +178,15 @@ function onLinkEvent(event: MouseEvent) {
 
 export function installTabs(r: Router) {
   router = r
+  // The tab that was showing when the current user-driven navigation started
+  let leaving: string | null = null
 
   r.beforeEach((to, from) => {
     if (internal || from === START_LOCATION) return
+    if (leaving === null) {
+      rememberOffset()
+      leaving = state.active
+    }
     const kind = singletonOf(to.fullPath)
     if (!kind) return
     const active = activeTab.value
@@ -175,7 +199,9 @@ export function installTabs(r: Router) {
     state.active = create(to.fullPath).id
   })
 
-  r.afterEach((to, _from, failure) => {
+  r.afterEach((to, from, failure) => {
+    const left = leaving
+    leaving = null
     if (internal || failure || to.path === "/@login") return
     const location = to.fullPath
     const tab = activeTab.value
@@ -187,14 +213,19 @@ export function installTabs(r: Router) {
       } else {
         tab.history.splice(tab.index + 1, Infinity, location)
         tab.index = tab.history.length - 1
+        offsets.delete(offsetKey(tab))
         if (tab.history.length > MAX_HISTORY) {
           tab.history.shift()
           tab.index--
+          forgetOffsets(tab.id)
         }
       }
     }
     const kind = singletonOf(location)
     if (kind) state.tabs = state.tabs.filter((t) => t.id === state.active || singletonOf(tabLocation(t)) !== kind)
+    const shown = activeTab.value
+    if (shown && left !== null && left !== shown.id) restoreScroll(offsets.get(offsetKey(shown)) ?? 0)
+    else if (to.path !== from.path) scrollToTop()
     save()
   })
 

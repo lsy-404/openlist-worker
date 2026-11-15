@@ -163,7 +163,7 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .editor__host {
-  height: clamp(280px, 70vh, 820px);
+  height: clamp(280px, 70dvh, 820px);
 }
 .editor__error {
   margin: 0;
