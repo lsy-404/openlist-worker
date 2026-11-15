@@ -122,3 +122,12 @@ export function iconForEntry(entry: { name: string; is_dir: boolean; type: numbe
   if (entry.is_dir) return folder
   return BY_EXTENSION[extension(entry.name)] ?? BY_TYPE[entry.type] ?? document
 }
+
+import board from "@fluentui/svg-icons/icons/board_24_regular.svg?raw"
+import eye from "@fluentui/svg-icons/icons/eye_24_regular.svg?raw"
+import eyeOff from "@fluentui/svg-icons/icons/eye_off_24_regular.svg?raw"
+import key from "@fluentui/svg-icons/icons/key_24_regular.svg?raw"
+import search from "@fluentui/svg-icons/icons/search_24_regular.svg?raw"
+import stop from "@fluentui/svg-icons/icons/stop_24_regular.svg?raw"
+
+export const systemIcons = { board, eye, eyeOff, key, search, stop }
