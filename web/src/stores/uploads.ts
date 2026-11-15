@@ -23,6 +23,8 @@ export interface UploadItem {
   error: string
   batch: number
   controller: AbortController | null
+  /** "finishing" once all bytes are on the server and the storage is still writing the file. */
+  phase: "sending" | "finishing"
   /** Epoch milliseconds when the upload was queued or last retried. */
   startedAt: number
   /** Epoch milliseconds when it reached a final state, 0 while pending. */
@@ -96,11 +98,13 @@ async function run(item: UploadItem): Promise<void> {
   item.status = "uploading"
   item.error = ""
   item.loaded = 0
+  item.phase = "sending"
   try {
     await prepareDirs(item)
     await uploadFile(item.path, item.file, {
       signal: controller.signal,
       onProgress: (loaded) => (item.loaded = Math.min(loaded, item.size)),
+      onPhase: (phase) => (item.phase = phase),
     })
     item.loaded = item.size
     item.status = "done"
@@ -216,6 +220,7 @@ export async function enqueueUploads(dir: string, selection: UploadSelection): P
     error: "",
     batch,
     controller: null,
+    phase: "sending",
     startedAt: Date.now(),
     endedAt: 0,
   }))
