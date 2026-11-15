@@ -11,6 +11,8 @@ export interface User {
   disabled: boolean
   sso_id: string
   otp: boolean
+  groups?: number[]
+  sso_groups?: string[]
 }
 
 export interface UserForm {
@@ -20,6 +22,7 @@ export interface UserForm {
   disabled: boolean
   sso_id: string
   bits: boolean[]
+  groups: number[]
 }
 
 /** Bit indexes mirror the backend PermissionBit table, grouped for display. */
@@ -56,6 +59,7 @@ export const emptyUser = (): UserForm => ({
   disabled: false,
   sso_id: "",
   bits: PERMISSION_KEYS.map(() => false),
+  groups: [],
 })
 
 export const bitsFromMask = (mask: number) => PERMISSION_KEYS.map((_, i) => ((mask >> i) & 1) === 1)

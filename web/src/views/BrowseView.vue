@@ -25,7 +25,7 @@ const router = useRouter()
 const path = computed(() => normalizePath([route.params.pathMatch].flat().join("/")))
 const reserved = computed(() => isReservedPath(path.value))
 
-const { resource, loading, error, locked, wrongPassword, submitting, reload, submitPassword } = useBrowse(path)
+const { resource, loading, error, locked, noAccess, wrongPassword, submitting, reload, submitPassword } = useBrowse(path)
 
 const dialogOpen = ref(false)
 watch(locked, (value) => (dialogOpen.value = value), { immediate: true })
@@ -113,6 +113,8 @@ watch(resource, (value) => {
       <StateMessage v-else-if="locked" :icon="icons.lockClosed" :title="t('browse.state.locked')" :detail="t('browse.state.lockedDetail')">
         <FluentButton tone="primary" @click="dialogOpen = true">{{ t("browse.state.enterPassword") }}</FluentButton>
       </StateMessage>
+
+      <StateMessage v-else-if="noAccess" :icon="icons.lockClosed" :title="t('browse.state.noAccess')" :detail="t('browse.state.noAccessDetail')" />
 
       <StateMessage
         v-else-if="error"

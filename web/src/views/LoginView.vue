@@ -1,17 +1,26 @@
 <script setup lang="ts">
 import { useI18n } from "vue-i18n"
-import { onMounted } from "vue"
+import { computed, onMounted } from "vue"
 import { useRoute, useRouter } from "vue-router"
-import { FluentProgressRing } from "@platform-kit/fluent/vue"
+import { FluentButton, FluentProgressRing } from "@platform-kit/fluent/vue"
 import { getToken, setToken } from "@/api"
 import { loadUser, rememberReturnPath, safeReturnPath, takeReturnPath } from "@/stores/session"
+import StateMessage from "@/components/StateMessage.vue"
+import { icons } from "@/utils/icons"
 import { notify } from "@/stores/toast"
 
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 
+const denied = computed(() => route.query.error === "sso_denied")
+
+function retry() {
+  location.replace("/api/auth/sso?method=sso_get_token")
+}
+
 onMounted(async () => {
+  if (denied.value) return
   const { token, redirect } = route.query
   const target = safeReturnPath(redirect)
   if (typeof token === "string" && token) {
@@ -30,7 +39,11 @@ onMounted(async () => {
 </script>
 
 <template>
-  <main class="login" role="status">
+  <StateMessage v-if="denied" :icon="icons.lockClosed" :title="t('errors.login.denied')" :detail="t('errors.login.deniedDetail')">
+    <FluentButton tone="primary" @click="retry">{{ t("errors.login.retry") }}</FluentButton>
+    <FluentButton @click="router.replace('/')">{{ t("errors.login.backToFiles") }}</FluentButton>
+  </StateMessage>
+  <main v-else class="login" role="status">
     <FluentProgressRing :size="32" indeterminate :label="t('errors.login.signingIn')" />
     <p>{{ t("errors.login.redirecting") }}</p>
   </main>

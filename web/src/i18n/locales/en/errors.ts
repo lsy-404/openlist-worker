@@ -11,6 +11,10 @@ const messages: typeof zh = {
     failed: "Sign-in failed. Continuing as guest.",
     signingIn: "Signing in",
     redirecting: "Redirecting to sign-in…",
+    denied: "This account is not authorised",
+    deniedDetail: "This account has not been allowed to access this site. Contact the administrator.",
+    retry: "Sign in again",
+    backToFiles: "Back to public files",
   },
 }
 

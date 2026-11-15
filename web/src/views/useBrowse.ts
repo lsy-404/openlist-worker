@@ -1,7 +1,7 @@
 import { onBeforeUnmount, ref, shallowRef, watch, type Ref } from "vue"
 import { api, ApiError, clearToken, getToken, type FsFile, type FsList } from "@/api"
 import { forgetPassword, passwordFor, rememberPassword } from "@/stores/passwords"
-import { loadUser } from "@/stores/session"
+import { isAdmin, isGuest, loadUser, session } from "@/stores/session"
 
 export type Resource =
   | { kind: "folder"; path: string; list: FsList }
@@ -22,11 +22,18 @@ async function fetchResource(path: string, password: string, refresh: boolean, s
   }
 }
 
+// A general user without groups is denied everywhere, so a 403 is not a password prompt
+function hasNoGroups() {
+  const user = session.user as { groups?: unknown[] } | null
+  return !isGuest.value && !isAdmin.value && !user?.groups?.length
+}
+
 export function useBrowse(path: Ref<string>) {
   const resource = shallowRef<Resource | null>(null)
   const loading = ref(true)
   const error = ref<ApiError | null>(null)
   const locked = ref(false)
+  const noAccess = ref(false)
   const wrongPassword = ref(false)
   const submitting = ref(false)
   let controller: AbortController | null = null
@@ -40,6 +47,7 @@ export function useBrowse(path: Ref<string>) {
     loading.value = true
     error.value = null
     if (!supplied) locked.value = false
+    noAccess.value = false
 
     try {
       let result: Resource
@@ -63,7 +71,9 @@ export function useBrowse(path: Ref<string>) {
     } catch (err) {
       if (current.signal.aborted) return
       resource.value = null
-      if (err instanceof ApiError && err.kind === "forbidden") {
+      if (err instanceof ApiError && err.kind === "forbidden" && hasNoGroups()) {
+        noAccess.value = true
+      } else if (err instanceof ApiError && err.kind === "forbidden") {
         // A saved password that no longer works is discarded so the dialog starts clean
         if (password && !supplied) forgetPassword(target)
         wrongPassword.value = supplied
@@ -94,5 +104,5 @@ export function useBrowse(path: Ref<string>) {
   )
   onBeforeUnmount(() => controller?.abort())
 
-  return { resource, loading, error, locked, wrongPassword, submitting, reload: () => load({ refresh: true }), submitPassword }
+  return { resource, loading, error, locked, noAccess, wrongPassword, submitting, reload: () => load({ refresh: true }), submitPassword }
 }
