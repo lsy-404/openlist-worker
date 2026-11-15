@@ -5078,7 +5078,9 @@ adminRouter.post("/meta/delete", async (c) => {
 })
 
 import { userRouter } from "./user"
+import { syncRouter } from "./sync"
 adminRouter.route("/user", userRouter)
+adminRouter.route("/sync", syncRouter)
 
 adminRouter.get("/kv/status", async (c) => {
   const [statusData, storeStatus] = await Promise.all([
