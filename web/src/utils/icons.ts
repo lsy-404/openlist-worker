@@ -140,3 +140,7 @@ import cut from "@fluentui/svg-icons/icons/cut_24_regular.svg?raw"
 import hardDrive from "@fluentui/svg-icons/icons/hard_drive_24_regular.svg?raw"
 
 export const browseIcons = { appsListDetail, arrowRight, chevronDown, clipboardPaste, cut, hardDrive }
+
+import people from "@fluentui/svg-icons/icons/people_24_regular.svg?raw"
+
+export const groupIcons = { people }

@@ -13,8 +13,9 @@ import AdminTable from "@/admin/components/AdminTable.vue"
 import { useAdminList } from "@/admin/useAdminList"
 import { notify } from "@/stores/toast"
 import { icons } from "@/utils/icons"
+import PermissionBits from "./PermissionBits.vue"
+import type { Group } from "../group/types"
 import {
-  PERMISSION_GROUPS,
   PERMISSION_KEYS,
   ROLE_ADMIN,
   ROLE_GENERAL,
@@ -30,9 +31,15 @@ const { t } = useI18n()
 
 const { rows, loading, error, reload } = useAdminList((signal) => adminList<User>("/user/list", undefined, signal))
 
+// The group list is optional context for the editor, so a failed load must not block the page
+const { rows: groupRows } = useAdminList((signal) => adminList<Group>("/group/list", undefined, signal).catch(() => []))
+const groupNames = (row: User) =>
+  (row.groups ?? []).map((id) => groupRows.value.find((group) => group.id === id)?.name).filter(Boolean).join(", ")
+
 const columns = computed(() => [
   { key: "username", label: t("adminUser.columns.username") },
   { key: "role", label: t("adminUser.columns.role") },
+  { key: "groups", label: t("adminUser.columns.groups") },
   { key: "base_path", label: t("adminUser.columns.basePath") },
   { key: "status", label: t("adminUser.columns.status") },
   { key: "sso", label: t("adminUser.columns.sso") },
@@ -73,10 +80,15 @@ function openEdit(row: User) {
     disabled: row.disabled,
     sso_id: row.sso_id,
     bits: bitsFromMask(row.permission),
+    groups: [...(row.groups ?? [])],
   })
   formError.value = null
   nameError.value = undefined
   panelOpen.value = true
+}
+
+function toggleGroup(id: number, on: boolean) {
+  form.groups = on ? [...form.groups, id] : form.groups.filter((value) => value !== id)
 }
 
 async function save() {
@@ -95,7 +107,10 @@ async function save() {
       sso_id: form.sso_id.trim(),
     }
     if (form.password) body.password = form.password
-    if (role.value === ROLE_GENERAL) body.permission = maskFromBits(form.bits)
+    if (role.value === ROLE_GENERAL) {
+      body.permission = maskFromBits(form.bits)
+      body.groups = form.groups
+    }
     const user = editing.value
     await adminPost(user ? "/user/update" : "/user/create", user ? { ...body, id: user.id } : body)
     panelOpen.value = false
@@ -164,6 +179,7 @@ const actionsFor = (row: User) => [
 
     <AdminTable :columns="columns" :rows="rows" :loading="loading" :error="error" :empty-title="t('adminUser.empty')" @retry="reload">
       <template #cell-role="{ row }">{{ roleLabel(row.role) }}</template>
+      <template #cell-groups="{ row }">{{ row.role === ROLE_GENERAL ? groupNames(row) || t("adminUser.noGroups") : "-" }}</template>
       <template #cell-status="{ row }">
         <span class="badge" :class="row.disabled ? 'badge--off' : 'badge--on'">
           {{ row.disabled ? t("adminUser.disabled") : t("adminUser.enabled") }}
@@ -201,18 +217,29 @@ const actionsFor = (row: User) => [
       <AdminFormField v-model="form.base_path" :label="t('adminUser.fields.basePath')" :help="t('adminUser.fields.basePathHelp')" />
       <AdminFormField v-model="form.sso_id" :label="t('adminUser.fields.ssoId')" :help="t('adminUser.fields.ssoIdHelp')" />
 
+      <h3 class="section">{{ t("adminUser.sections.groups") }}</h3>
       <template v-if="role === ROLE_GENERAL">
-        <template v-for="group in PERMISSION_GROUPS" :key="group.key">
-          <h3 class="section">{{ t(`adminUser.groups.${group.key}`) }}</h3>
-          <AdminFormField
-            v-for="bit in group.bits"
-            :key="bit"
-            v-model="form.bits[bit]"
-            kind="switch"
-            :label="t(`adminUser.permissions.${PERMISSION_KEYS[bit]}`)"
-          />
-        </template>
+        <p class="note">{{ t("adminUser.fields.groupsHelp") }}</p>
+        <p v-if="!groupRows.length" class="note">{{ t("adminUser.fields.groupsNone") }}</p>
+        <AdminFormField
+          v-for="group in groupRows"
+          :key="group.id"
+          :model-value="form.groups.includes(group.id)"
+          kind="switch"
+          :label="group.name"
+          @update:model-value="toggleGroup(group.id, $event === true)"
+        />
       </template>
+      <p v-else class="note">{{ t("adminUser.groupsFixed") }}</p>
+      <AdminFormField
+        v-if="editing?.sso_groups?.length"
+        :model-value="editing.sso_groups.join(', ')"
+        readonly
+        :label="t('adminUser.fields.ssoGroups')"
+        :help="t('adminUser.fields.ssoGroupsHelp')"
+      />
+
+      <PermissionBits v-if="role === ROLE_GENERAL" v-model="form.bits" />
       <p v-else class="note">{{ t("adminUser.permissionFixed") }}</p>
     </AdminPanel>
   </AdminPage>

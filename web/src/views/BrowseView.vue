@@ -10,7 +10,7 @@ import { syncFolder } from "@/browse/tree"
 import { useShortcuts } from "@/browse/useShortcuts"
 import PasswordDialog from "@/components/PasswordDialog.vue"
 import StateMessage from "@/components/StateMessage.vue"
-import { siteTitle } from "@/stores/session"
+import { isAdmin, isGuest, session, siteTitle } from "@/stores/session"
 import { icons } from "@/utils/icons"
 import { encodePath, isReservedPath, normalizePath, parentPath, splitPath } from "@/utils/path"
 import FileView from "./FileView.vue"
@@ -29,6 +29,14 @@ const { resource, loading, error, locked, wrongPassword, submitting, reload, sub
 
 const dialogOpen = ref(false)
 watch(locked, (value) => (dialogOpen.value = value), { immediate: true })
+
+const noAccess = computed(
+  () =>
+    error.value?.kind === "forbidden" &&
+    !isGuest.value &&
+    !isAdmin.value &&
+    !((session.user as { groups?: unknown[] } | null)?.groups?.length ?? 0),
+)
 
 const rematching = ref(false)
 const initial = computed(() => (loading.value || rematching.value) && !resource.value)
@@ -113,6 +121,8 @@ watch(resource, (value) => {
       <StateMessage v-else-if="locked" :icon="icons.lockClosed" :title="t('browse.state.locked')" :detail="t('browse.state.lockedDetail')">
         <FluentButton tone="primary" @click="dialogOpen = true">{{ t("browse.state.enterPassword") }}</FluentButton>
       </StateMessage>
+
+      <StateMessage v-else-if="noAccess" :icon="icons.lockClosed" :title="t('browse.state.noAccess')" :detail="t('browse.state.noAccessDetail')" />
 
       <StateMessage
         v-else-if="error"

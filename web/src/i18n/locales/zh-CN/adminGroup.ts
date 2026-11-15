@@ -1,0 +1,22 @@
+export default {
+  title: "身份组",
+  description: "按目录授予普通用户访问权限。普通用户只能访问其所在身份组授权的目录，没有身份组的普通用户无法访问任何内容。",
+  columns: { name: "名称", description: "说明", scopes: "授权目录", members: "成员数" },
+  empty: "暂无身份组",
+  emptyDetail: "创建身份组并将用户加入后，普通用户才能访问文件。",
+  panel: { create: "新建身份组", edit: "编辑身份组" },
+  sections: { scopes: "授权目录" },
+  fields: { name: "名称", nameRequired: "请输入名称", description: "说明" },
+  presets: { read: "只读", write: "读写", custom: "自定义" },
+  scopes: {
+    help: "每一行授予该目录及其子目录的访问权限。成员同时属于多个身份组时，权限取并集。",
+    empty: "尚未授权任何目录",
+    path: "目录路径",
+    pathHelp: "例如 /public。",
+    permission: "权限",
+    showBits: "展开全部权限",
+    hideBits: "收起权限",
+    add: "添加目录",
+    remove: "移除",
+  },
+}

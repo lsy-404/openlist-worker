@@ -9,5 +9,9 @@ export default {
     failed: "登录失败，已以游客身份继续",
     signingIn: "正在登录",
     redirecting: "正在跳转到登录…",
+    denied: "此账号未获授权",
+    deniedDetail: "该账号尚未被允许访问本站，请联系管理员。",
+    retry: "重新登录",
+    backToFiles: "返回公开文件",
   },
 }

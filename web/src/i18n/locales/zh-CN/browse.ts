@@ -52,5 +52,7 @@ export default {
     locked: "此位置需要密码",
     lockedDetail: "输入访问密码后才能查看内容。",
     enterPassword: "输入密码",
+    noAccess: "你的账号尚未获得任何目录的访问权限",
+    noAccessDetail: "请联系管理员，将你加入可访问目录的身份组。",
   },
 }

@@ -54,6 +54,8 @@ const messages: typeof zh = {
     locked: "This location needs a password",
     lockedDetail: "Enter the password to view its contents.",
     enterPassword: "Enter password",
+    noAccess: "Your account has not been granted access to any directory",
+    noAccessDetail: "Contact the administrator to be added to a group that can access directories.",
   },
 }
 
