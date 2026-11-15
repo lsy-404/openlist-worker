@@ -5,7 +5,6 @@ import { RouterView, useRoute } from "vue-router"
 import { FluentButton, FluentTheme } from "@platform-kit/fluent/vue"
 import AppFrame from "@/components/AppFrame.vue"
 import FileOpsHost from "@/components/FileOpsHost.vue"
-import UploadPanel from "@/components/UploadPanel.vue"
 import StateMessage from "@/components/StateMessage.vue"
 import ToastHost from "@/components/ToastHost.vue"
 import { prefs, resolvedTheme } from "@/stores/prefs"
@@ -80,7 +79,6 @@ async function retry() {
       <RouterView v-else />
     </AppFrame>
     <FileOpsHost />
-    <UploadPanel />
     <ToastHost />
   </FluentTheme>
 </template>
