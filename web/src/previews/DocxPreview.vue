@@ -75,7 +75,7 @@ watch(buffer, async (data) => {
 
 <style scoped>
 .doc {
-  max-height: 78vh;
+  max-height: 78dvh;
   overflow: auto;
   background: var(--fluent-control-alt);
 }

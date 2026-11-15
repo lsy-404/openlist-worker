@@ -283,7 +283,7 @@ const cursor = computed(() => (scale.value > 1 ? (dragging.value ? "grabbing" : 
 <style scoped>
 .stage {
   position: relative;
-  height: clamp(260px, 72vh, 880px);
+  height: clamp(260px, 72dvh, 880px);
   overflow: hidden;
   touch-action: none;
   user-select: none;

@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue"
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { useI18n } from "vue-i18n"
 import { useRoute } from "vue-router"
 import AppFooter from "@/components/AppFooter.vue"
 import AppHeader from "@/components/AppHeader.vue"
 import TabStrip from "@/tabs/TabStrip.vue"
+import { setScroller } from "@/tabs/scroll"
 import { state as tabState } from "@/tabs/store"
 
 defineProps<{ sidebar?: boolean }>()
@@ -12,6 +13,7 @@ defineProps<{ sidebar?: boolean }>()
 const { t } = useI18n()
 const route = useRoute()
 const open = ref(false)
+const content = ref<HTMLElement | null>(null)
 const showTabs = computed(() => route.path !== "/@login" && tabState.tabs.length > 0)
 
 watch(() => route.fullPath, () => (open.value = false))
@@ -23,7 +25,11 @@ watch(open, (value) => {
   if (value) window.addEventListener("keydown", onKey)
   else window.removeEventListener("keydown", onKey)
 })
-onBeforeUnmount(() => window.removeEventListener("keydown", onKey))
+onMounted(() => setScroller(content.value))
+onBeforeUnmount(() => {
+  window.removeEventListener("keydown", onKey)
+  setScroller(null)
+})
 </script>
 
 <template>
@@ -43,9 +49,11 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey))
       <div class="frame__card" :class="{ 'frame__card--flush': !sidebar, 'frame__card--tabs': showTabs }">
         <TabStrip v-if="showTabs" class="frame__tabs" />
         <div id="frame-toolbar" class="frame__toolbar"><slot name="toolbar" /></div>
-        <div class="frame__content"><slot /></div>
+        <div ref="content" class="frame__content">
+          <slot />
+          <AppFooter />
+        </div>
         <div id="frame-status" class="frame__status" />
-        <AppFooter />
       </div>
     </div>
   </div>
@@ -62,25 +70,25 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey))
   display: flex;
   flex: 1;
   gap: 4px;
-  padding: 0 max(8px, env(safe-area-inset-right)) 8px max(0px, env(safe-area-inset-left));
+  min-height: 0;
   min-width: 0;
+  padding: 0 max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(0px, env(safe-area-inset-left));
 }
 .frame__pane {
-  position: sticky;
-  top: 56px;
-  align-self: flex-start;
   flex: none;
   box-sizing: border-box;
   width: 256px;
-  height: calc(100dvh - 56px);
   padding: 8px;
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .frame__card {
   display: flex;
   flex-direction: column;
   flex: 1;
+  min-height: 0;
   min-width: 0;
+  overflow: hidden;
   background: var(--fluent-surface);
   border: 1px solid var(--fluent-border);
   border-radius: calc(var(--fluent-panel-radius) + 4px);
@@ -92,22 +100,15 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey))
   --tabs-h: 36px;
 }
 .frame__tabs {
-  position: sticky;
-  top: 56px;
-  z-index: 6;
+  flex: none;
 }
 .frame__toolbar {
-  position: sticky;
-  top: calc(56px + var(--tabs-h, 0px));
-  z-index: 5;
+  flex: none;
   background: var(--fluent-surface);
   border-bottom: 1px solid var(--fluent-border);
-  border-radius: calc(var(--fluent-panel-radius) + 4px) calc(var(--fluent-panel-radius) + 4px) 0 0;
 }
 .frame__status {
-  position: sticky;
-  bottom: 0;
-  z-index: 5;
+  flex: none;
   background: var(--fluent-surface);
   border-top: 1px solid var(--fluent-border);
 }
@@ -116,8 +117,16 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey))
   display: none;
 }
 .frame__content {
+  display: flex;
+  flex-direction: column;
   flex: 1;
+  min-height: 0;
   min-width: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.frame__content > :deep(*) {
+  flex-shrink: 0;
 }
 .frame__scrim {
   display: none;
@@ -132,10 +141,9 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey))
   .frame__pane {
     position: fixed;
     inset: 56px auto 0 0;
-    align-self: stretch;
     z-index: 9;
     width: min(300px, 85vw);
-    height: auto;
+    padding-bottom: max(8px, env(safe-area-inset-bottom));
     background: var(--fluent-acrylic);
     border-inline-end: 1px solid var(--fluent-border);
     box-shadow: var(--fluent-shadow);

@@ -50,7 +50,7 @@ const { status, text, encoding, error, load } = useTextFile(() => ({ url: props.
 .frame {
   display: block;
   width: 100%;
-  height: clamp(320px, 75vh, 900px);
+  height: clamp(320px, 75dvh, 900px);
   border: 0;
   background: #fff;
 }

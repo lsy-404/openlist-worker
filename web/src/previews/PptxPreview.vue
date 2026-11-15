@@ -44,7 +44,7 @@ watch(buffer, async (data) => {
 
 <style scoped>
 .slides {
-  max-height: 78vh;
+  max-height: 78dvh;
   overflow: auto;
   padding: 12px;
   background: var(--fluent-control-alt);

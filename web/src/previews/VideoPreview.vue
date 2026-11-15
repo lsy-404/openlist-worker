@@ -234,7 +234,7 @@ onBeforeUnmount(() => {
 .video__player {
   display: block;
   width: 100%;
-  max-height: 78vh;
+  max-height: 78dvh;
   min-height: 180px;
 }
 .video__loading {

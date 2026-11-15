@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from "vue"
+import { computed, ref } from "vue"
 import { useI18n } from "vue-i18n"
 import { RouterLink, useRoute } from "vue-router"
 import { FluentButton, FluentPopover, FluentProgressRing, FluentSvgIcon } from "@platform-kit/fluent/vue"
+import { useFlyout } from "@/utils/useFlyout"
 import { cards, hasFailed, isCardPending, overall } from "./cards"
 import { taskIcons } from "./icons"
 import { clearFinishedTasks, runningCount } from "./store"
@@ -11,10 +12,8 @@ import TaskList from "./TaskList.vue"
 const { t } = useI18n()
 const route = useRoute()
 
-const open = ref(false)
-const closing = ref(false)
+const { open, closing, toggle, requestClose, onAnimationEnd } = useFlyout()
 const anchor = ref<HTMLElement | null>(null)
-let fallback = 0
 
 const visible = computed(() => cards.value.length > 0 || route.path === "/@tasks")
 const canClear = computed(() => cards.value.some((card) => !isCardPending(card)))
@@ -25,30 +24,6 @@ const label = computed(() =>
       ? t("tasks.center.buttonFailed")
       : t("tasks.center.title"),
 )
-
-function finish() {
-  clearTimeout(fallback)
-  open.value = false
-  closing.value = false
-}
-
-// The popover is removed when `open` turns false, so the exit animation runs first
-function requestClose() {
-  if (!open.value || closing.value) return
-  closing.value = true
-  fallback = window.setTimeout(finish, 300)
-}
-
-function toggle() {
-  if (open.value) requestClose()
-  else open.value = true
-}
-
-function onAnimationEnd(event: AnimationEvent) {
-  if (closing.value && event.target === event.currentTarget) finish()
-}
-
-onBeforeUnmount(() => clearTimeout(fallback))
 </script>
 
 <template>
@@ -74,7 +49,7 @@ onBeforeUnmount(() => clearTimeout(fallback))
       :open="open"
       :anchor="anchor"
       :label="t('tasks.center.title')"
-      :class="['status-flyout', { 'status-flyout--closing': closing }]"
+      :class="['status-flyout', 'flyout-motion', { 'flyout-motion--closing': closing }]"
       @update:open="requestClose"
       @animationend="onAnimationEnd"
     >
@@ -128,7 +103,7 @@ onBeforeUnmount(() => clearTimeout(fallback))
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  box-shadow: 0 0 0 2px var(--fluent-mica);
+  box-shadow: 0 0 0 2px var(--fluent-bg);
 }
 .center__dot--ok {
   background: var(--fluent-success);
@@ -174,25 +149,6 @@ onBeforeUnmount(() => clearTimeout(fallback))
   max-width: calc(100vw - 16px);
   padding: 0;
 }
-.status-flyout.fluent-popover[data-fluent-menu-motion] {
-  transform-origin: top;
-  animation: status-flyout-in var(--fluent-fast) var(--fluent-ease);
-}
-.status-flyout.status-flyout--closing.fluent-popover[data-fluent-menu-motion] {
-  animation: status-flyout-out var(--fluent-faster) var(--fluent-ease-accelerate) forwards;
-}
-@keyframes status-flyout-in {
-  from {
-    opacity: 0;
-    transform: translateY(-8px);
-  }
-}
-@keyframes status-flyout-out {
-  to {
-    opacity: 0;
-    transform: translateY(-8px);
-  }
-}
 @media (max-width: 640px) {
   .status-flyout.fluent-popover {
     left: 0 !important;
@@ -210,7 +166,7 @@ onBeforeUnmount(() => clearTimeout(fallback))
   .status-flyout.fluent-popover[data-fluent-menu-motion] {
     animation: status-sheet-in var(--fluent-normal) var(--fluent-ease);
   }
-  .status-flyout.status-flyout--closing.fluent-popover[data-fluent-menu-motion] {
+  .status-flyout.flyout-motion--closing.fluent-popover[data-fluent-menu-motion] {
     animation: status-sheet-out var(--fluent-fast) var(--fluent-ease-accelerate) forwards;
   }
 }

@@ -3,6 +3,7 @@ import { computed, nextTick, ref, watch } from "vue"
 import { useI18n } from "vue-i18n"
 import { useRouter } from "vue-router"
 import { FluentButton, FluentSvgIcon } from "@platform-kit/fluent/vue"
+import TaskCenter from "@/tasks/TaskCenter.vue"
 import { icons } from "@/utils/icons"
 import { describeLocation } from "./describe"
 import { activateTab, closeTab, openTab, state, tabLocation } from "./store"
@@ -74,6 +75,7 @@ function onKey(event: KeyboardEvent, id: string) {
     <FluentButton class="strip__add" tone="subtle" icon-only :aria-label="t('tabs.new')" :title="t('tabs.new')" @click="openTab('/')">
       <FluentSvgIcon :svg="icons.add" :size="16" />
     </FluentButton>
+    <TaskCenter class="strip__tasks" />
   </div>
 </template>
 
@@ -169,6 +171,11 @@ function onKey(event: KeyboardEvent, id: string) {
   min-width: 28px;
   height: 28px;
   padding: 0;
+}
+.strip__tasks {
+  flex: none;
+  align-self: center;
+  margin-inline-start: auto;
 }
 .tab-enter-active,
 .tab-leave-active {

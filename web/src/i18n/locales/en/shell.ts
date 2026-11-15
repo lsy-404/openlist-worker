@@ -9,6 +9,7 @@ const messages: typeof zh = {
   header: {
     login: "Sign in",
     account: "Account",
+    groups: "Identity groups",
     logout: "Sign out",
     language: "Language",
     toggleTheme: "Switch between light and dark theme",

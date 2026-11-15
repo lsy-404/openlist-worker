@@ -13,7 +13,6 @@ export const router = createRouter({
     adminRoute,
     { path: "/:pathMatch(.*)*", components: { default: BrowseView, sidebar: BrowseSidebar } },
   ],
-  scrollBehavior: (to, from, saved) => saved ?? (to.path === from.path ? false : { top: 0 }),
 })
 
 installTabs(router)

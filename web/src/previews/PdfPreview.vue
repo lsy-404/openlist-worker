@@ -248,7 +248,7 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .pdf__scroller {
-  height: clamp(320px, 78vh, 960px);
+  height: clamp(320px, 78dvh, 960px);
   overflow: auto;
   background: var(--fluent-control-alt);
 }
