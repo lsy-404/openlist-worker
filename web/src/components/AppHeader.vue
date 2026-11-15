@@ -9,8 +9,7 @@ import { prefs, resolvedTheme, toggleTheme } from "@/stores/prefs"
 import SearchBox from "@/search/SearchBox.vue"
 import { isAdmin, isGuest, logout, rememberReturnPath, roleLabel, session, siteTitle } from "@/stores/session"
 import { getToken } from "@/api"
-import { taskIcons } from "@/tasks/icons"
-import { runningCount, tasks } from "@/tasks/store"
+import TaskCenter from "@/tasks/TaskCenter.vue"
 import { icons } from "@/utils/icons"
 
 defineProps<{ navToggle?: boolean; navOpen?: boolean }>()
@@ -23,10 +22,6 @@ const router = useRouter()
 const themeIcon = computed(() => (resolvedTheme.value === "dark" ? icons.weatherMoon : icons.weatherSunny))
 
 const hasToken = !!getToken()
-const showTasks = computed(() => !isGuest.value || tasks.value.length > 0)
-const tasksLabel = computed(() =>
-  runningCount.value ? t("tasks.headerLabelRunning", { count: runningCount.value }) : t("tasks.headerLabel"),
-)
 const userItems = computed(() => [
   { value: "profile", label: `${session.user?.username ?? ""} · ${roleLabel.value}`, disabled: true },
   ...(isAdmin.value ? [{ value: "admin", label: t("shell.header.admin") }] : []),
@@ -65,18 +60,7 @@ function onUser(value: string) {
     <div class="header__search" data-slot="header-search"><slot name="search"><SearchBox /></slot></div>
 
     <div class="header__tools">
-      <FluentButton
-        v-if="showTasks"
-        class="header__tasks"
-        tone="subtle"
-        icon-only
-        :aria-label="tasksLabel"
-        :title="tasksLabel"
-        @click="router.push('/@tasks')"
-      >
-        <FluentSvgIcon :svg="taskIcons.taskList" :size="20" />
-        <span v-if="runningCount" class="header__badge" aria-hidden="true">{{ runningCount > 99 ? "99+" : runningCount }}</span>
-      </FluentButton>
+      <TaskCenter />
       <FluentButton v-if="isAdmin" class="header__admin" tone="subtle" @click="router.push('/@manage')">
         <FluentSvgIcon :svg="icons.settings" :size="20" />
         <span class="header__admin-text">{{ t("shell.header.admin") }}</span>
@@ -153,23 +137,6 @@ function onUser(value: string) {
 .header__search {
   flex: 1;
   min-width: 0;
-}
-.header__tasks {
-  position: relative;
-}
-.header__badge {
-  position: absolute;
-  top: 0;
-  inset-inline-end: 0;
-  min-width: 16px;
-  padding: 0 4px;
-  box-sizing: border-box;
-  border-radius: 999px;
-  background: var(--fluent-accent);
-  color: var(--fluent-accent-text);
-  font-size: 0.7rem;
-  line-height: 16px;
-  text-align: center;
 }
 .header__pending {
   width: 88px;

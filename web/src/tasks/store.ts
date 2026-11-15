@@ -25,6 +25,8 @@ export interface Task {
   error: string
   /** Set when the page was reloaded while the task was still pending. */
   interrupted: boolean
+  /** Uploads queued together share a batch. */
+  batch?: number
   cancel?: () => void
   retry?: () => void
 }
@@ -57,6 +59,7 @@ interface ArchivedUpload {
   endedAt: number
   error: string
   interrupted: boolean
+  batch?: number
 }
 
 const STORAGE_KEY = "tasks.history"
@@ -163,6 +166,7 @@ function fromUpload(item: UploadItem): Task {
     endedAt: item.endedAt,
     error: item.error,
     interrupted: false,
+    batch: item.batch,
     cancel: state === "queued" || state === "running" ? () => cancelUpload(item) : undefined,
     retry: state === "failed" || state === "cancelled" ? () => retryUpload(item) : undefined,
   }
@@ -230,7 +234,7 @@ function restore(): void {
     if (spec) {
       ops.push({ ...common, spec, state: state === "succeeded" ? "succeeded" : "failed" })
     } else if (task.kind === "upload") {
-      archived.value.push({ ...common, title: task.title, target: task.target, folder: task.folder, state, size: task.size, loaded: task.loaded })
+      archived.value.push({ ...common, title: task.title, target: task.target, folder: task.folder, state, size: task.size, loaded: task.loaded, batch: task.batch })
     }
   }
 }

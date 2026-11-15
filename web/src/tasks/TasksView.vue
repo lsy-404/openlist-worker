@@ -1,45 +1,37 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from "vue"
+import { computed, ref } from "vue"
 import { useI18n } from "vue-i18n"
 import { FluentButton, FluentSegmented } from "@platform-kit/fluent/vue"
 import StateMessage from "@/components/StateMessage.vue"
 import { taskIcons } from "./icons"
-import TaskRow from "./TaskRow.vue"
-import { cancelAllTasks, clearFinishedTasks, runningCount, tasks, type Task } from "./store"
+import { cards, isCardPending, type TaskCard } from "./cards"
+import TaskList from "./TaskList.vue"
+import { cancelAllTasks, clearFinishedTasks } from "./store"
 
 type Filter = "all" | "running" | "finished" | "failed"
 
 const { t } = useI18n()
 const filter = ref<Filter>("all")
 
-const MATCH: Record<Filter, (task: Task) => boolean> = {
+const MATCH: Record<Filter, (card: TaskCard) => boolean> = {
   all: () => true,
-  running: (task) => task.state === "queued" || task.state === "running",
-  finished: (task) => task.state === "succeeded" || task.state === "cancelled",
-  failed: (task) => task.state === "failed",
+  running: isCardPending,
+  finished: (card) => card.state === "succeeded" || card.state === "cancelled",
+  failed: (card) => card.state === "failed",
 }
 
 const counts = computed(() => ({
-  all: tasks.value.length,
-  running: tasks.value.filter(MATCH.running).length,
-  finished: tasks.value.filter(MATCH.finished).length,
-  failed: tasks.value.filter(MATCH.failed).length,
+  all: cards.value.length,
+  running: cards.value.filter(MATCH.running).length,
+  finished: cards.value.filter(MATCH.finished).length,
+  failed: cards.value.filter(MATCH.failed).length,
 }))
 const options = computed(() =>
   (Object.keys(MATCH) as Filter[]).map((value) => ({ value, label: `${t(`tasks.filters.${value}`)} ${counts.value[value]}` })),
 )
-const visible = computed(() => tasks.value.filter(MATCH[filter.value]))
-const canCancel = computed(() => tasks.value.some((task) => task.cancel))
+const visible = computed(() => cards.value.filter(MATCH[filter.value]))
+const canCancel = computed(() => cards.value.some((card) => card.cancel))
 const canClear = computed(() => counts.value.finished + counts.value.failed > 0)
-
-const now = ref(Date.now())
-let timer = 0
-onMounted(() => {
-  timer = window.setInterval(() => {
-    if (runningCount.value) now.value = Date.now()
-  }, 1000)
-})
-onBeforeUnmount(() => clearInterval(timer))
 </script>
 
 <template>
@@ -57,9 +49,7 @@ onBeforeUnmount(() => clearInterval(timer))
       </div>
     </div>
 
-    <ul v-if="visible.length" class="tasks__list">
-      <TaskRow v-for="task in visible" :key="task.id" :task="task" :now="now" />
-    </ul>
+    <div v-if="visible.length" class="tasks__list"><TaskList :cards="visible" /></div>
     <StateMessage v-else :icon="taskIcons.taskList" :title="t(`tasks.empty.${filter}.title`)" :detail="t(`tasks.empty.${filter}.detail`)" />
   </section>
 </template>
@@ -94,12 +84,7 @@ onBeforeUnmount(() => clearInterval(timer))
   gap: 8px;
 }
 .tasks__list {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin: 16px 0 0;
-  padding: 0;
+  margin-top: 16px;
 }
 @media (max-width: 640px) {
   .tasks {
