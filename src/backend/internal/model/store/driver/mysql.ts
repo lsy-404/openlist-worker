@@ -8,7 +8,14 @@
  * - MYSQL_HOST, MYSQL_PORT, MYSQL_USER, MYSQL_PASS, MYSQL_NAME
  */
 import type { Driver } from "../types"
-import { buildDdl, getTablePrefix, KV_SCHEMA_MYSQL } from "../schema"
+import {
+  buildAddColumnDdl,
+  buildDdl,
+  getTablePrefix,
+  groupColumns,
+  KV_SCHEMA_MYSQL,
+  MYSQL_COLUMNS_SQL,
+} from "../schema"
 
 function isNode(): boolean {
   return typeof process !== "undefined" && process.release?.name === "node"
@@ -54,6 +61,10 @@ async function ensureSchema(pool: any, env?: any): Promise<void> {
   if (_schemaInitedPrefix === prefix) return
   // KV 表（map/key 格式）+ 列式表（sql 格式）一并创建
   for (const ddl of [...KV_SCHEMA_MYSQL, ...buildDdl("mysql", env)]) {
+    await pool.query(ddl)
+  }
+  const [cols] = await pool.query(MYSQL_COLUMNS_SQL)
+  for (const ddl of buildAddColumnDdl("mysql", groupColumns(cols || []), env)) {
     await pool.query(ddl)
   }
   _schemaInitedPrefix = prefix

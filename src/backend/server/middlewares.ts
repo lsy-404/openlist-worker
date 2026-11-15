@@ -8,6 +8,7 @@ import {
   ENCRYPTION_SECRET_KV_KEY,
 } from "../internal/model/db"
 import { isPasswordStampValid } from "../pkg/password"
+import { effectiveScopes, type PermissionScope } from "../pkg/permission"
 
 // 不再硬编码 JWT 密钥。优先使用环境变量 JWT_SECRET（推荐在生产配置），
 // 否则从持久化后端读取一个随机密钥（首次生成后复用，重启不失效），
@@ -477,6 +478,7 @@ export async function getUserFromContext(c: Context): Promise<{
   sso_id?: string
   allow_ldap?: boolean
   otp_secret?: string
+  scopes: PermissionScope[]
 } | null> {
   // 仅静态 API token（settings.token）命中才视为匿名管理员；
   // JWT 管理员走下方正常解析，避免用户名被硬编码成 "api-token"。
@@ -487,6 +489,7 @@ export async function getUserFromContext(c: Context): Promise<{
       disabled: false,
       username: "api-token",
       base_path: "/",
+      scopes: [],
     }
   }
 
@@ -516,6 +519,7 @@ export async function getUserFromContext(c: Context): Promise<{
           sso_id: guest.sso_id || "",
           allow_ldap: !!guest.allow_ldap,
           otp_secret: guest.otp_secret,
+          scopes: [],
         }
       }
     } catch {}
@@ -548,6 +552,7 @@ export async function getUserFromContext(c: Context): Promise<{
       sso_id: user.sso_id || "",
       allow_ldap: !!user.allow_ldap,
       otp_secret: user.otp_secret,
+      scopes: effectiveScopes(user, db.groups),
     }
   } catch {
     return null

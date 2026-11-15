@@ -262,7 +262,13 @@ test("normalizeSegments / getActualPath / isWithinUserRoot 钳制越根遍历", 
   assert.equal(normalizeSegments(""), "/")
 
   // base_path 受限：先折叠 reqPath 再拼接，`..` 不得越过用户根
-  const user = { id: 9, role: 0, permission: 0, base_path: "/photos/alice" }
+  const user = {
+    id: 9,
+    role: 0,
+    permission: 0,
+    base_path: "/photos/alice",
+    scopes: [{ path: "/", permission: 0 }],
+  }
   assert.equal(getActualPath(user, "/"), "/photos/alice")
   assert.equal(getActualPath(user, "/sub/x"), "/photos/alice/sub/x")
   assert.equal(getActualPath(user, "/../bob/x"), "/photos/alice/bob/x")
@@ -363,6 +369,7 @@ test("WebDAV: 受 meta 保护的路径返回带指引的 403（而不是裸 403�
     permission: 1 << 8, // WEBDAV_READ
     base_path: "/",
     disabled: false,
+    groups: [1],
     pwd_update_at: new Date().toISOString(),
   }
   await setUserPassword(davUser, "dav-pass")
@@ -370,6 +377,7 @@ test("WebDAV: 受 meta 保护的路径返回带指引的 403（而不是裸 403�
     {
       settings: [],
       users: [davUser],
+      groups: [{ id: 1, name: "all", scopes: [{ path: "/", permission: 0 }] }],
       storages: [],
       shares: [],
       metas: [

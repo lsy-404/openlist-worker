@@ -5079,7 +5079,9 @@ adminRouter.post("/meta/delete", async (c) => {
 
 import { userRouter } from "./user"
 import { syncRouter } from "./sync"
+import { groupRouter } from "./group"
 adminRouter.route("/user", userRouter)
+adminRouter.route("/group", groupRouter)
 adminRouter.route("/sync", syncRouter)
 
 adminRouter.get("/kv/status", async (c) => {

@@ -2,7 +2,7 @@ import { listItems } from "./storage"
 import { FileItem } from "../driver/base"
 import { canAccess, getNearestMeta } from "../../pkg/meta"
 import type { Meta } from "../../pkg/meta"
-import type { UserPermissionObj } from "../../pkg/permission"
+import { scopeAccess, type UserPermissionObj } from "../../pkg/permission"
 
 export interface SearchOptions {
   parent?: string
@@ -84,6 +84,10 @@ export async function search(
       const subPath =
         dirPath === "/" ? `/${item.name}` : `${dirPath}/${item.name}`
 
+      // 用户组授权：scope 之外不可见；scope 祖先目录只用于下钻，本身不作为结果
+      const level = enforceAcl ? scopeAccess(opts.user, subPath).level : "granted"
+      if (level === "none") continue
+
       // meta 访问控制：密码保护 / read_users 白名单覆盖的内容不出现在搜索
       // 结果里。历史缺陷：搜索完全跳过 meta 判定——实测直连被密码保护而
       // 被拒的目录，其文件名/大小仍能被搜出来（信息泄露）。
@@ -105,7 +109,7 @@ export async function search(
       if (scope === 2 && isDir) scopeMatch = false
 
       // 挂载点不作为结果项返回（避免搜到 "123云盘" 这类虚拟文件夹本身）
-      if (!isMountPoint && nameMatch && scopeMatch) {
+      if (!isMountPoint && level === "granted" && nameMatch && scopeMatch) {
         matches.push({
           ...item,
           parent:

@@ -1,6 +1,13 @@
 import { Hono } from "hono"
 import { getUserFromContext } from "./middlewares"
-import { canWrite, getActualPath, can, PermissionBit } from "../pkg/permission"
+import {
+  canInAnyScope,
+  canWrite,
+  getActualPath,
+  can,
+  isWithinUserRoot,
+  PermissionBit,
+} from "../pkg/permission"
 import { assertSafeUrl } from "../pkg/http"
 import { safeErrorMessage } from "../pkg/errs"
 import { getDb, getSettings, resolvePath, saveDb } from "../internal/model/db"
@@ -95,12 +102,12 @@ function joinVirtualPath(base: string, relative: string): string {
 }
 
 function writableActualPath(user: any, value: unknown): string {
-  if (!canWrite(user)) throw new Error("Permission denied")
   const virtualPath = normalizeVirtualPath(value)
   if (virtualPath === "/@s" || virtualPath.startsWith("/@s/")) {
     throw new Error("Writing through a share path is not allowed")
   }
   const actualPath = getActualPath(user, virtualPath)
+  if (!canWrite(user, actualPath)) throw new Error("Permission denied")
   const basePath = normalizeVirtualPath(user?.base_path || "/")
   if (
     basePath !== "/" &&
@@ -288,6 +295,7 @@ async function readStoredSeed(
   path: string,
 ): Promise<Uint8Array> {
   const actualPath = getActualPath(user, normalizeVirtualPath(path))
+  if (!isWithinUserRoot(user, actualPath)) throw new Error("Permission denied")
   const { item, rawUrl: apiRawUrl } = await getItem(
     actualPath,
     storageContext(c),
@@ -387,6 +395,8 @@ async function collectSourceFiles(
     if (result.length >= maxFiles)
       throw new Error(`Seed file count exceeds the ${maxFiles} file limit`)
     const actualPath = getActualPath(user, virtualPath)
+    if (!isWithinUserRoot(user, actualPath))
+      throw new Error("Permission denied")
     const { item, rawUrl: apiRawUrl } = await getItem(
       actualPath,
       storageContext(c),
@@ -583,7 +593,7 @@ async function generateSeed(
     body.include_direct_source === true ||
     body.include_sources === true ||
     directFiles.size > 0
-  if (includeShare && !can(user, PermissionBit.SHARE))
+  if (includeShare && !canInAnyScope(user, PermissionBit.SHARE))
     throw new Error("Permission denied")
   if ((includeShare || includeDirect) && !siteUrl)
     throw new Error(
@@ -911,6 +921,7 @@ seedRouter.get("/capabilities", async (c) => {
   if (path) {
     try {
       const actual = getActualPath(user, normalizeVirtualPath(path))
+      if (!isWithinUserRoot(user, actual)) throw new Error("Permission denied")
       const resolved = await resolvePath(actual)
       if (!resolved.isVirtual && resolved.storage) {
         const driver = await getDriver(
@@ -1073,6 +1084,8 @@ seedRouter.post("/capabilities", async (c) => {
     }
     const parsed = await parseBodySeed(c, user, body)
     const targetPath = getActualPath(user, normalizeVirtualPath(body.path))
+    if (!isWithinUserRoot(user, targetPath))
+      throw new Error("Permission denied")
     const resolved = await resolvePath(targetPath)
     if (resolved.isVirtual || !resolved.storage)
       throw new Error("Target storage was not found")
@@ -1153,7 +1166,10 @@ seedRouter.post("/generate", async (c) => {
   if (!user || user.disabled) return errorResponse(c, 401, "Unauthorized")
   try {
     const body = await readJson(c)
-    if ((body.save_path || body.output_path) && !canWrite(user))
+    if (
+      (body.save_path || body.output_path) &&
+      !canInAnyScope(user, PermissionBit.WRITE_CONTENT)
+    )
       return errorResponse(c, 403, "Permission denied")
     const requestedFormats: unknown[] = Array.isArray(body.formats)
       ? body.formats
@@ -1309,7 +1325,10 @@ seedRouter.post("/convert", async (c) => {
   if (!user || user.disabled) return errorResponse(c, 401, "Unauthorized")
   try {
     const body = await readJson(c)
-    if ((body.save_path || body.output_path) && !canWrite(user))
+    if (
+      (body.save_path || body.output_path) &&
+      !canInAnyScope(user, PermissionBit.WRITE_CONTENT)
+    )
       return errorResponse(c, 403, "Permission denied")
     const target = detectFormat(
       body.to_format || body.target_format || body.output_format,
@@ -1402,16 +1421,20 @@ async function transferBody(
   rapidOnly: boolean | ((body: any) => boolean),
 ) {
   const user = await getUserFromContext(c)
-  if (!canWrite(user)) return errorResponse(c, 403, "Permission denied")
+  if (!canInAnyScope(user, PermissionBit.WRITE_CONTENT))
+    return errorResponse(c, 403, "Permission denied")
   try {
     const rapid = typeof rapidOnly === "function" ? rapidOnly(body) : rapidOnly
-    if (!rapid && !can(user, PermissionBit.OFFLINE_DOWNLOAD)) {
-      return errorResponse(c, 403, "Offline download permission is required")
-    }
     const parsed = await parseBodySeed(c, user, body)
     const finalRoot = normalizeVirtualPath(
       body.target_path || body.destination || body.path || "/",
     )
+    if (
+      !rapid &&
+      !can(user, PermissionBit.OFFLINE_DOWNLOAD, getActualPath(user, finalRoot))
+    ) {
+      return errorResponse(c, 403, "Offline download permission is required")
+    }
     const transitPath = String(
       body.transit_path ||
         (body.options && typeof body.options === "object"
@@ -1660,7 +1683,7 @@ const updateSeedHandler = async (c: any) => {
   try {
     const body = await readJson(c)
     const outputPath = String(body.output_path || body.save_path || "")
-    if (outputPath && !canWrite(user))
+    if (outputPath && !canInAnyScope(user, PermissionBit.WRITE_CONTENT))
       return errorResponse(c, 403, "Permission denied")
     const parsed = await parseBodySeed(c, user, body)
     const patch =

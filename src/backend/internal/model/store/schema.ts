@@ -35,6 +35,7 @@ export const TABLE_NAMES = [
   "shares",
   "metas",
   "plugins",
+  "groups",
 ] as const
 
 export type TableName = (typeof TABLE_NAMES)[number]
@@ -87,6 +88,7 @@ export const TABLE_KEY: Record<DdlTableName, string> = {
   shares: "id",
   metas: "id",
   plugins: "id",
+  groups: "id",
   sshkeys: "id",
 }
 
@@ -164,6 +166,8 @@ export const TABLES: Record<DdlTableName, TableDef> = {
       { name: "sso_id", type: "string", nullable: true },
       { name: "authn", type: "string", nullable: true },  // WebAuthn credentials JSON
       { name: "allow_ldap", type: "bool", nullable: true },
+      { name: "groups", type: "json", nullable: true },
+      { name: "sso_groups", type: "json", nullable: true },
       // TS 特有：密码更新时间（Go 用 pwd_ts/pwd_hash/salt 内部字段，json:"-" 不落 API）
       { name: "pwd_update_at", type: "date", nullable: true },
     ],
@@ -210,6 +214,16 @@ export const TABLES: Record<DdlTableName, TableDef> = {
       { name: "r_sub", type: "bool", nullable: true },
       { name: "header", type: "string", nullable: true },
       { name: "header_sub", type: "bool", nullable: true },
+    ],
+  },
+
+  groups: {
+    name: "groups",
+    columns: [
+      { name: "id", type: "number", pk: true },
+      { name: "name", type: "string", unique: true },
+      { name: "description", type: "string", nullable: true },
+      { name: "scopes", type: "json", nullable: true },
     ],
   },
 
@@ -275,6 +289,7 @@ export const TABLE_SQL_NAMES: Record<DdlTableName, string> = {
   shares: "sharing_dbs",
   metas: "metas",
   plugins: "plugins",
+  groups: "groups",
   sshkeys: "ssh_public_keys",
 }
 
@@ -466,6 +481,53 @@ export function buildDdl(dialect: "sqlite" | "mysql", env?: any): string[] {
     out.push(buildTableDdl(TABLES[name], dialect, tableSqlName(name, env)))
   }
   return out
+}
+
+/**
+ * 为已存在的旧表补齐缺失列的 ALTER 语句（`CREATE TABLE IF NOT EXISTS` 不会改旧表）。
+ *
+ * existing 为各表现有列名（小写）；新增列均为可空，可直接 ADD COLUMN。
+ */
+export function buildAddColumnDdl(
+  dialect: "sqlite" | "mysql",
+  existing: Record<string, Set<string>>,
+  env?: any,
+): string[] {
+  const out: string[] = []
+  for (const name of DDL_TABLE_NAMES) {
+    const have = existing[tableSqlName(name, env)]
+    if (!have) continue
+    for (const col of TABLES[name].columns) {
+      if (col.pk || have.has(col.name)) continue
+      out.push(
+        `ALTER TABLE ${quote(tableSqlName(name, env))} ADD COLUMN ${quote(col.name)} ${sqlType(col, dialect)}`,
+      )
+    }
+  }
+  return out
+}
+
+/** SQLite 各表的列自检语句（D1 / DO 只放行 PRAGMA 语句形式）。 */
+export function sqliteTableInfoSql(env?: any): Array<{ table: string; sql: string }> {
+  return DDL_TABLE_NAMES.map((name) => {
+    const table = tableSqlName(name, env)
+    return { table, sql: `PRAGMA table_info(${quote(table)})` }
+  })
+}
+
+/** MySQL 列出当前库所有表的现有列。 */
+export const MYSQL_COLUMNS_SQL =
+  "SELECT TABLE_NAME AS t, COLUMN_NAME AS c FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE()"
+
+export function groupColumns(rows: Array<{ t: string; c: string }>): Record<string, Set<string>> {
+  const out: Record<string, Set<string>> = {}
+  for (const r of rows) (out[r.t] ??= new Set()).add(r.c)
+  return out
+}
+
+/** table_info 结果行 → groupColumns 的输入。 */
+export function tableInfoRows(table: string, rows: any[]): Array<{ t: string; c: string }> {
+  return rows.map((r) => ({ t: table, c: String(r.name) }))
 }
 
 /** 兼容旧导出：SQLite（Cloudflare D1）方言建表语句。 */

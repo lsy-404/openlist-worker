@@ -20,7 +20,7 @@ export async function ssoOnlyGuard(c: Context, next: Next) {
   if (BLOCKED.test(path)) {
     return c.json({ code: 403, message: "Single sign-on is the only login method", data: null }, 403)
   }
-  if (c.req.method === "GET" && path === "/@login" && !c.req.query("token")) {
+  if (c.req.method === "GET" && path === "/@login" && !c.req.query("token") && !c.req.query("error")) {
     return c.redirect(SSO_START, 302)
   }
   return next()

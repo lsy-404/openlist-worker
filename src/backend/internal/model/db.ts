@@ -665,6 +665,14 @@ export const defaultDb = {
       flag: 0,
     },
     {
+      key: "sso_group_claim",
+      value: "groups",
+      type: "string",
+      help: "OIDC claim that carries the user's group names",
+      group: 7,
+      flag: 0,
+    },
+    {
       key: "sso_default_dir",
       value: "/",
       type: "string",
@@ -1042,6 +1050,7 @@ export const defaultDb = {
   metas: [],
   shares: [],
   plugins: [],
+  groups: [],
 }
 
 let memoryDb: any = null
@@ -1271,6 +1280,11 @@ const ensureDefaultShares = (db: any) => {
   }
 }
 
+const ensureDefaultGroups = (db: any) => {
+  if (!db) return
+  if (!Array.isArray(db.groups)) db.groups = []
+}
+
 const ensureDefaultPlugins = (db: any) => {
   if (!db) return
   if (!db.plugins) {
@@ -1440,6 +1454,7 @@ const loadDb = async (envCtx?: any) => {
       ensureDefaultShares(memoryDb)
       ensureDefaultPlugins(memoryDb)
       ensureDefaultMetas(memoryDb)
+      ensureDefaultGroups(memoryDb)
       // 读取成功：内存库与持久化存储一致，允许后续写回。
       dbTrusted = true
       dbLastLoadError = null
@@ -1458,6 +1473,7 @@ const loadDb = async (envCtx?: any) => {
       ensureDefaultShares(memoryDb)
       ensureDefaultPlugins(memoryDb)
       ensureDefaultMetas(memoryDb)
+      ensureDefaultGroups(memoryDb)
       return memoryDb
     }
     dbTrusted = false
@@ -1480,6 +1496,7 @@ const loadDb = async (envCtx?: any) => {
     ensureDefaultShares(memoryDb)
     ensureDefaultPlugins(memoryDb)
     ensureDefaultMetas(memoryDb)
+    ensureDefaultGroups(memoryDb)
     return memoryDb
   }
 
@@ -1490,6 +1507,7 @@ const loadDb = async (envCtx?: any) => {
   ensureDefaultShares(memoryDb)
   ensureDefaultPlugins(memoryDb)
   ensureDefaultMetas(memoryDb)
+  ensureDefaultGroups(memoryDb)
   return memoryDb
 }
 

@@ -24,6 +24,7 @@ import {
 } from "./fs_node_upload"
 import {
   can,
+  canInAnyScope,
   canCopy,
   canMove,
   canRemove,
@@ -32,6 +33,8 @@ import {
   getActualPath,
   isAdmin,
   isWithinUserRoot,
+  filterByScope,
+  scopeAccess,
   PermissionBit,
 } from "../pkg/permission"
 import {
@@ -129,6 +132,20 @@ const getStorageRequestContext = (c: any) => {
 // 的安全漏洞，同时让 /fs/list 的 write 字段如实反映请求者身份。
 const permissionDenied = (c: any) =>
   c.json({ code: 403, message: "Permission denied", data: null }, 403)
+
+// 通用用户没有任何有效目录授权时的统一拒绝。
+const noDirectoryAccess = (c: any) =>
+  c.json({ code: 403, message: "No directory access granted", data: null }, 403)
+
+/** 读类入口的 scope 拒绝：无授权给出专用提示，越界给通用拒绝。 */
+const scopeReadDenied = (c: any, user: any) =>
+  user?.role === 0 && !(user.scopes || []).length
+    ? noDirectoryAccess(c)
+    : permissionDenied(c)
+
+/** 任一路径上缺少该权限位即为 true（管理员恒 false，访客恒 true）。 */
+const lacks = (user: any, bit: number, ...paths: string[]) =>
+  !paths.every((p) => can(user, bit, p))
 
 /**
  * 目录级写权限（meta.write_users）的**执行点**。
@@ -249,6 +266,9 @@ fsRouter.post("/dirs", async (c) => {
   if (!body.force_root) {
     reqPath = getActualPath(user, reqPath)
   }
+  if (!body.force_root && !reqPath.startsWith("/@s")) {
+    if (scopeAccess(user, reqPath).level === "none") return scopeReadDenied(c, user)
+  }
   try {
     // Share path support for completeness
     if (reqPath.startsWith("/@s")) {
@@ -299,7 +319,10 @@ fsRouter.post("/dirs", async (c) => {
       )
     }
     const { content } = await listItems(reqPath, requestContext)
-    const dirs = content
+    const visibleDirs = body.force_root
+      ? content
+      : filterByScope(user, reqPath, content) || []
+    const dirs = visibleDirs
       .filter((item: any) => item.is_dir && !isHidden(dirMeta, reqPath, item.name))
       .map((item: any) => ({
         name: item.name,
@@ -436,6 +459,7 @@ fsRouter.post("/list", async (c) => {
     }
 
     // 普通路径：应用 meta 权限（密码 + read_users + readme/header + hide 过滤）
+    if (scopeAccess(user, reqPath).level === "none") return scopeReadDenied(c, user)
     const meta = await getNearestMeta(reqPath, c.env)
     if (!canAccess(user, meta, reqPath, body.password || "")) {
       return c.json(
@@ -453,12 +477,13 @@ fsRouter.post("/list", async (c) => {
       )
     }
 
-    const { content, provider, storage } = await listItems(
+    const { content: rawContent, provider, storage } = await listItems(
       reqPath,
       requestContext,
     )
+    const content = filterByScope(user, reqPath, rawContent) || []
     // write：用户写权限 + meta.write_users 白名单（对齐 Go common.CanWrite）
-    const writable = canWrite(user) && canWriteMeta(user, meta, reqPath)
+    const writable = canWrite(user, reqPath) && canWriteMeta(user, meta, reqPath)
     const writeContentBypass = canWriteContentBypassUserPerms(meta, reqPath)
     // 下载签名（对齐 Go server/common.Sign + handles.isEncrypt）：
     //   目录不签名；sign_all（或 TS 扩展的 link_expiration）开启、
@@ -667,6 +692,7 @@ fsRouter.post("/get", async (c) => {
     }
 
     // 普通路径：应用 meta 权限（密码 + read_users + readme/header）
+    if (scopeAccess(user, reqPath).level === "none") return scopeReadDenied(c, user)
     const meta = await getNearestMeta(reqPath, c.env)
     if (!canAccess(user, meta, reqPath, body.password || "")) {
       return c.json(
@@ -705,7 +731,7 @@ fsRouter.post("/get", async (c) => {
       sign && rawUrl && !/[?&]sign=/.test(rawUrl)
         ? `${rawUrl}${rawUrl.includes("?") ? "&" : "?"}sign=${sign}`
         : rawUrl
-    const writable = canWrite(user) && canWriteMeta(user, meta, reqPath)
+    const writable = canWrite(user, reqPath) && canWriteMeta(user, meta, reqPath)
     const writeContentBypass = canWriteContentBypassUserPerms(meta, reqPath)
 
     // Related：查找同目录中文件名前缀相同的文件（字幕 .srt/.ass/.vtt、NFO 等）
@@ -800,7 +826,7 @@ function validateDirPath(p: any): string {
 
 fsRouter.post("/mkdir", async (c) => {
   const user = await getUserFromContext(c)
-  if (!canWrite(user)) return permissionDenied(c)
+  if (!canInAnyScope(user, PermissionBit.WRITE_CONTENT)) return permissionDenied(c)
   const body = await c.req.json().catch(() => ({}))
   const rawPath = body.path || "/"
   try {
@@ -809,6 +835,7 @@ fsRouter.post("/mkdir", async (c) => {
     return c.json({ code: 400, message: e.message, data: null }, 400)
   }
   const reqPath = getActualPath(user, rawPath)
+  if (lacks(user, PermissionBit.WRITE_CONTENT, reqPath)) return permissionDenied(c)
   if (await deniedByMetaWriteAcl(c, user, [reqPath])) return permissionDenied(c)
   const requestContext = getStorageRequestContext(c)
   try {
@@ -823,7 +850,7 @@ fsRouter.post("/rename", async (c) => {
   const user = await getUserFromContext(c)
   // 重命名使用独立的 RENAME 权限位（此前误用 WRITE_CONTENT，导致「只有上传
   // 权限的用户也能改名」而「只授予 RENAME 的用户反被拒绝」）。
-  if (!canRename(user)) return permissionDenied(c)
+  if (!canInAnyScope(user, PermissionBit.RENAME)) return permissionDenied(c)
   const { path: oldPath, name: newName } = await c.req.json().catch(() => ({}))
   let cleanName = ""
   try {
@@ -835,6 +862,7 @@ fsRouter.post("/rename", async (c) => {
   const requestContext = getStorageRequestContext(c)
   try {
     const actualOldPath = getActualPath(user, oldPath || "/")
+    if (lacks(user, PermissionBit.RENAME, actualOldPath)) return permissionDenied(c)
     if (await deniedByMetaWriteAcl(c, user, [actualOldPath]))
       return permissionDenied(c)
     await renameItem(actualOldPath, cleanName, requestContext)
@@ -847,7 +875,7 @@ fsRouter.post("/rename", async (c) => {
 fsRouter.post("/remove", async (c) => {
   const user = await getUserFromContext(c)
   // 删除使用独立的 DELETE 权限位（此前误用 WRITE_CONTENT）。
-  if (!canRemove(user)) return permissionDenied(c)
+  if (!canInAnyScope(user, PermissionBit.DELETE)) return permissionDenied(c)
   const { dir, names } = await c.req.json().catch(() => ({}))
   if (!Array.isArray(names) || names.length === 0) {
     return c.json(
@@ -869,6 +897,7 @@ fsRouter.post("/remove", async (c) => {
   const requestContext = getStorageRequestContext(c)
   try {
     const actualDir = getActualPath(user, dir || "/")
+    if (lacks(user, PermissionBit.DELETE, actualDir)) return permissionDenied(c)
     const aclPaths = cleanNames.map((n) =>
       `${actualDir}/${n}`.replace(/\/{2,}/g, "/"),
     )
@@ -884,7 +913,7 @@ fsRouter.post("/remove", async (c) => {
 fsRouter.post("/move", async (c) => {
   const user = await getUserFromContext(c)
   // 移动使用独立的 MOVE 权限位（此前误用 WRITE_CONTENT）。
-  if (!canMove(user)) return permissionDenied(c)
+  if (!canInAnyScope(user, PermissionBit.MOVE)) return permissionDenied(c)
   const { src_dir, dst_dir, names } = await c.req.json().catch(() => ({}))
   if (!Array.isArray(names) || names.length === 0) {
     return c.json(
@@ -908,6 +937,8 @@ fsRouter.post("/move", async (c) => {
   try {
     const actualSrcDir = getActualPath(user, src_dir || "/")
     const actualDstDir = getActualPath(user, dst_dir || "/")
+    if (lacks(user, PermissionBit.MOVE, actualSrcDir, actualDstDir))
+      return permissionDenied(c)
     const aclPaths = [
       actualDstDir,
       ...cleanNames.map((n) =>
@@ -926,7 +957,7 @@ fsRouter.post("/move", async (c) => {
 fsRouter.post("/copy", async (c) => {
   const user = await getUserFromContext(c)
   // 复制使用独立的 COPY 权限位（此前误用 WRITE_CONTENT）。
-  if (!canCopy(user)) return permissionDenied(c)
+  if (!canInAnyScope(user, PermissionBit.COPY)) return permissionDenied(c)
   const { src_dir, dst_dir, names } = await c.req.json().catch(() => ({}))
   if (!Array.isArray(names) || names.length === 0) {
     return c.json(
@@ -950,6 +981,8 @@ fsRouter.post("/copy", async (c) => {
   try {
     const actualSrcDir = getActualPath(user, src_dir || "/")
     const actualDstDir = getActualPath(user, dst_dir || "/")
+    if (lacks(user, PermissionBit.COPY, actualSrcDir, actualDstDir))
+      return permissionDenied(c)
     const aclPaths = [
       actualDstDir,
       ...cleanNames.map((n) =>
@@ -967,7 +1000,7 @@ fsRouter.post("/copy", async (c) => {
 
 fsRouter.put("/put", async (c) => {
   const user = await getUserFromContext(c)
-  if (!canWrite(user)) return permissionDenied(c)
+  if (!canInAnyScope(user, PermissionBit.WRITE_CONTENT)) return permissionDenied(c)
   const rawPath = decodeURIComponent(c.req.header("File-Path") || "")
   if (!rawPath.trim()) {
     return c.json(
@@ -981,6 +1014,7 @@ fsRouter.put("/put", async (c) => {
     return c.json({ code: 400, message: e.message, data: null }, 400)
   }
   const reqPath = getActualPath(user, rawPath)
+  if (lacks(user, PermissionBit.WRITE_CONTENT, reqPath)) return permissionDenied(c)
   if (await deniedByMetaWriteAcl(c, user, [reqPath])) return permissionDenied(c)
   const requestContext = getStorageRequestContext(c)
   try {
@@ -995,7 +1029,7 @@ fsRouter.put("/put", async (c) => {
 
 fsRouter.put("/form", async (c) => {
   const user = await getUserFromContext(c)
-  if (!canWrite(user)) return permissionDenied(c)
+  if (!canInAnyScope(user, PermissionBit.WRITE_CONTENT)) return permissionDenied(c)
   const rawPath = decodeURIComponent(c.req.header("File-Path") || "")
   if (!rawPath.trim()) {
     return c.json(
@@ -1009,6 +1043,7 @@ fsRouter.put("/form", async (c) => {
     return c.json({ code: 400, message: e.message, data: null }, 400)
   }
   const reqPath = getActualPath(user, rawPath)
+  if (lacks(user, PermissionBit.WRITE_CONTENT, reqPath)) return permissionDenied(c)
   if (await deniedByMetaWriteAcl(c, user, [reqPath])) return permissionDenied(c)
   const requestContext = getStorageRequestContext(c)
   try {
@@ -1043,6 +1078,7 @@ fsRouter.post("/add_offline_download", async (c) => {
   }
   const { path: rawPath, urls } = await c.req.json().catch(() => ({}))
   const reqPath = getActualPath(user, rawPath || "/")
+  if (!isWithinUserRoot(user, reqPath)) return permissionDenied(c)
   if (!urls || urls.length === 0) {
     return c.json({ code: 400, message: "No URLs provided" })
   }
@@ -1065,6 +1101,7 @@ fsRouter.post("/search", async (c) => {
   }
   const body = await c.req.json().catch(() => ({}))
   const parentPath = getActualPath(user, body.parent || "/")
+  if (scopeAccess(user, parentPath).level === "none") return scopeReadDenied(c, user)
   try {
     const result = await search(
       {
@@ -1107,7 +1144,7 @@ fsRouter.post("/other", async (c) => {
   //
   // 体积边界说明：这里签发的直传 URL 由客户端直接写对象存储，数据不经过本站，
   // 因此 MAX_UPLOAD / MAX_UPPART 覆盖不到该路径——上限由下游存储自行约束。
-  if (!canWrite(user)) return permissionDenied(c)
+  if (lacks(user, PermissionBit.WRITE_CONTENT, reqPath)) return permissionDenied(c)
   try {
     const resolved = await resolvePath(reqPath)
     if (resolved.isVirtual || !resolved.storage) {
@@ -1135,7 +1172,7 @@ fsRouter.post("/other", async (c) => {
 
 fsRouter.post("/batch_rename", async (c) => {
   const user = await getUserFromContext(c)
-  if (!canRename(user)) return permissionDenied(c)
+  if (!canInAnyScope(user, PermissionBit.RENAME)) return permissionDenied(c)
   const { src_dir, rename_objects } = await c.req.json().catch(() => ({}))
   if (!Array.isArray(rename_objects) || rename_objects.length === 0) {
     return c.json(
@@ -1144,6 +1181,7 @@ fsRouter.post("/batch_rename", async (c) => {
     )
   }
   const dirPath = getActualPath(user, src_dir || "/")
+  if (lacks(user, PermissionBit.RENAME, dirPath)) return permissionDenied(c)
   const requestContext = getStorageRequestContext(c)
   try {
     const aclPaths = rename_objects
@@ -1168,7 +1206,7 @@ fsRouter.post("/batch_rename", async (c) => {
 
 fsRouter.post("/regex_rename", async (c) => {
   const user = await getUserFromContext(c)
-  if (!canRename(user)) return permissionDenied(c)
+  if (!canInAnyScope(user, PermissionBit.RENAME)) return permissionDenied(c)
   const { src_dir, src_name_regex, new_name_regex } = await c.req
     .json()
     .catch(() => ({}))
@@ -1179,6 +1217,7 @@ fsRouter.post("/regex_rename", async (c) => {
     )
   }
   const dirPath = getActualPath(user, src_dir || "/")
+  if (lacks(user, PermissionBit.RENAME, dirPath)) return permissionDenied(c)
   const requestContext = getStorageRequestContext(c)
   try {
     const srcRegex = new RegExp(src_name_regex)
@@ -1203,12 +1242,13 @@ fsRouter.post("/regex_rename", async (c) => {
 
 fsRouter.post("/recursive_move", async (c) => {
   const user = await getUserFromContext(c)
-  if (!canMove(user)) return permissionDenied(c)
+  if (!canInAnyScope(user, PermissionBit.MOVE)) return permissionDenied(c)
   const { src_dir, dst_dir, conflict_policy } = await c.req
     .json()
     .catch(() => ({}))
   const srcPath = getActualPath(user, src_dir || "/")
   const dstPath = getActualPath(user, dst_dir || "/")
+  if (lacks(user, PermissionBit.MOVE, srcPath, dstPath)) return permissionDenied(c)
   const policy = conflict_policy || "overwrite"
   const requestContext = getStorageRequestContext(c)
   try {
@@ -1267,9 +1307,10 @@ fsRouter.post("/recursive_move", async (c) => {
 
 fsRouter.post("/remove_empty_directory", async (c) => {
   const user = await getUserFromContext(c)
-  if (!canRemove(user)) return permissionDenied(c)
+  if (!canInAnyScope(user, PermissionBit.DELETE)) return permissionDenied(c)
   const { src_dir } = await c.req.json().catch(() => ({}))
   const srcPath = getActualPath(user, src_dir || "/")
+  if (lacks(user, PermissionBit.DELETE, srcPath)) return permissionDenied(c)
   if (await deniedByMetaWriteAcl(c, user, [srcPath])) return permissionDenied(c)
   const requestContext = getStorageRequestContext(c)
   try {
@@ -1353,7 +1394,7 @@ fsRouter.post("/link", async (c) => {
 
 fsRouter.post("/get_direct_upload_info", async (c) => {
   const user = await getUserFromContext(c)
-  if (!canWrite(user)) return permissionDenied(c)
+  if (!canInAnyScope(user, PermissionBit.WRITE_CONTENT)) return permissionDenied(c)
   const { path, file_name, file_size } = await c.req.json().catch(() => ({}))
   // 对齐 Go FsGetDirectUploadInfo 的四重校验：
   //  1) file_name 必须是单层相对文件名（拒绝 / \ .. 与空值），否则可能签发
@@ -1370,7 +1411,13 @@ fsRouter.post("/get_direct_upload_info", async (c) => {
   const dirPath = getActualPath(user, path || "/")
   const dstPath = dirPath === "/" ? `/${cleanName}` : `${dirPath}/${cleanName}`
   const parentMeta = await getNearestMeta(dirPath, c.env)
-  if (!canWrite(user) && !canWriteContentBypassUserPerms(parentMeta, dirPath)) {
+  if (
+    !canWrite(user, dirPath) &&
+    !(
+      scopeAccess(user, dirPath).level === "granted" &&
+      canWriteContentBypassUserPerms(parentMeta, dirPath)
+    )
+  ) {
     return permissionDenied(c)
   }
   if (await deniedByMetaWriteAcl(c, user, [dirPath])) return permissionDenied(c)
@@ -1464,7 +1511,7 @@ function sessionOwnedBy(session: any, user: any): boolean {
 
 fsRouter.post("/multipart/init", async (c) => {
   const user = await getUserFromContext(c)
-  if (!user || !canWrite(user)) return permissionDenied(c)
+  if (!user || !canInAnyScope(user, PermissionBit.WRITE_CONTENT)) return permissionDenied(c)
 
   const rawPath = decodeURIComponent(c.req.header("File-Path") || "")
   const size = parseInt(c.req.header("X-File-Size") || "0", 10)
@@ -1480,6 +1527,7 @@ fsRouter.post("/multipart/init", async (c) => {
 
   const { dir, name } = splitUploadPath(rawPath)
   const actualDir = getActualPath(user, dir)
+  if (lacks(user, PermissionBit.WRITE_CONTENT, actualDir)) return permissionDenied(c)
   if (await deniedByMetaWriteAcl(c, user, [actualDir, `${actualDir}/${name}`.replace(/\/{2,}/g, "/")]))
     return permissionDenied(c)
   const requestContext = getStorageRequestContext(c)
@@ -1567,7 +1615,7 @@ fsRouter.post("/multipart/init", async (c) => {
 
 fsRouter.put("/multipart/chunk", async (c) => {
   const user = await getUserFromContext(c)
-  if (!canWrite(user)) return permissionDenied(c)
+  if (!canInAnyScope(user, PermissionBit.WRITE_CONTENT)) return permissionDenied(c)
 
   const uploadId = c.req.header("X-Upload-Id") || ""
   const chunkIndex = parseInt(c.req.header("X-Chunk-Index") || "-1", 10)
@@ -1592,9 +1640,9 @@ fsRouter.put("/multipart/chunk", async (c) => {
 
   const requestContext = getStorageRequestContext(c)
   try {
-    const resolved = await resolvePath(
-      getActualPath(user, splitUploadPath(session.path).dir),
-    )
+    const sessionDir = getActualPath(user, splitUploadPath(session.path).dir)
+    if (lacks(user, PermissionBit.WRITE_CONTENT, sessionDir)) return permissionDenied(c)
+    const resolved = await resolvePath(sessionDir)
     if (resolved.isVirtual) throw new Error("failed get storage: storage not found")
     const driver = await getDriver(resolved.storage!.driver, resolved.storage)
     if (typeof (driver as any).uploadPart !== "function") {
@@ -1632,7 +1680,7 @@ fsRouter.put("/multipart/chunk", async (c) => {
 
 fsRouter.post("/multipart/complete", async (c) => {
   const user = await getUserFromContext(c)
-  if (!canWrite(user)) return permissionDenied(c)
+  if (!canInAnyScope(user, PermissionBit.WRITE_CONTENT)) return permissionDenied(c)
 
   const uploadId = c.req.header("X-Upload-Id") || ""
   if (isNodeUploadId(uploadId)) return nodeMultipartComplete(c, user, uploadId)
@@ -1649,9 +1697,9 @@ fsRouter.post("/multipart/complete", async (c) => {
 
   const requestContext = getStorageRequestContext(c)
   try {
-    const resolved = await resolvePath(
-      getActualPath(user, splitUploadPath(session.path).dir),
-    )
+    const sessionDir = getActualPath(user, splitUploadPath(session.path).dir)
+    if (lacks(user, PermissionBit.WRITE_CONTENT, sessionDir)) return permissionDenied(c)
+    const resolved = await resolvePath(sessionDir)
     if (resolved.isVirtual) throw new Error("failed get storage: storage not found")
     const driver = await getDriver(resolved.storage!.driver, resolved.storage)
     if (typeof (driver as any).completeUploadSession !== "function") {
@@ -1702,7 +1750,7 @@ fsRouter.get("/multipart/status", async (c) => {
 
 fsRouter.post("/multipart/abort", async (c) => {
   const user = await getUserFromContext(c)
-  if (!canWrite(user)) return permissionDenied(c)
+  if (!canInAnyScope(user, PermissionBit.WRITE_CONTENT)) return permissionDenied(c)
   const uploadId = c.req.header("X-Upload-Id") || ""
   if (isNodeUploadId(uploadId)) return nodeMultipartAbort(c, user, uploadId)
   const session = uploadId ? getSession(uploadId) : undefined
@@ -1844,10 +1892,12 @@ fsRouter.post("/archive/meta", async (c) => {
   const user = await getUserFromContext(c)
   if (!user || user.disabled) return c.json({ code: 401, message: "Unauthorized", data: null }, 401)
   // 归档读取需要独立能力位：READ_ARCHIVES
-  if (!can(user, PermissionBit.READ_ARCHIVES)) return permissionDenied(c)
+  if (!canInAnyScope(user, PermissionBit.READ_ARCHIVES)) return permissionDenied(c)
   const body = await c.req.json().catch(() => ({}))
   const path = String(body.path || c.req.query("path") || "").trim()
   if (!path) return c.json({ code: 400, message: "path is required", data: null }, 400)
+  if (lacks(user, PermissionBit.READ_ARCHIVES, getActualPath(user, path)))
+    return permissionDenied(c)
   const fmt = detectArchiveFormat(path)
   if (!fmt) {
     return c.json({ code: 400, message: "unrecognized archive format", data: null }, 400)
@@ -1894,11 +1944,13 @@ fsRouter.post("/archive/list", async (c) => {
   const user = await getUserFromContext(c)
   if (!user || user.disabled) return c.json({ code: 401, message: "Unauthorized", data: null }, 401)
   // 归档读取需要独立能力位：READ_ARCHIVES
-  if (!can(user, PermissionBit.READ_ARCHIVES)) return permissionDenied(c)
+  if (!canInAnyScope(user, PermissionBit.READ_ARCHIVES)) return permissionDenied(c)
   const body = await c.req.json().catch(() => ({}))
   const path = String(body.path || c.req.query("path") || "").trim()
   const innerPath = String(body.inner_path || "").trim().replace(/\/+/g, "/")
   if (!path) return c.json({ code: 400, message: "path is required", data: null }, 400)
+  if (lacks(user, PermissionBit.READ_ARCHIVES, getActualPath(user, path)))
+    return permissionDenied(c)
   const fmtList = detectArchiveFormat(path)
   if (!fmtList) {
     return c.json({ code: 400, message: "unrecognized archive format", data: null }, 400)
@@ -1960,7 +2012,10 @@ fsRouter.post("/archive/list", async (c) => {
 fsRouter.post("/archive/decompress", async (c) => {
   const user = await getUserFromContext(c)
   // 解压写文件：需要 WRITE_CONTENT（写目标）+ DECOMPRESS（解压能力）
-  if (!canWrite(user) || !can(user, PermissionBit.DECOMPRESS))
+  if (
+    !canInAnyScope(user, PermissionBit.WRITE_CONTENT) ||
+    !canInAnyScope(user, PermissionBit.DECOMPRESS)
+  )
     return c.json({ code: 403, message: "Permission denied", data: null }, 403)
   const body = await c.req.json().catch(() => ({}))
   const srcDir = String(body.src_dir || "").trim()
@@ -1976,11 +2031,18 @@ fsRouter.post("/archive/decompress", async (c) => {
     // 历史缺陷：dst_dir 被当作全局虚拟路径直接拼接，既未套用 base_path，
     // 也未做角色范围校验，受限用户可写到任意目录。
     const actualDstDir = getActualPath(user, dstDir)
-    if (!isWithinUserRoot(user, actualDstDir)) return permissionDenied(c)
+    if (
+      !isWithinUserRoot(user, actualDstDir) ||
+      lacks(user, PermissionBit.WRITE_CONTENT, actualDstDir) ||
+      lacks(user, PermissionBit.DECOMPRESS, actualDstDir)
+    )
+      return permissionDenied(c)
     if (await deniedByMetaWriteAcl(c, user, [actualDstDir]))
       return permissionDenied(c)
     for (const name of names) {
       const srcPath = srcDir ? `${srcDir}/${name}` : `/${name}`
+      if (!isWithinUserRoot(user, getActualPath(user, srcPath)))
+        return permissionDenied(c)
       const fmtDecomp = detectArchiveFormat(name)
       if (!fmtDecomp || !isNativelySupported(fmtDecomp)) {
         return c.json({ code: 400, message: `unsupported archive format: ${name} (only ZIP is supported)`, data: null }, 400)

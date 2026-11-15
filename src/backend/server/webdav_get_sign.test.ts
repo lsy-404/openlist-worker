@@ -53,6 +53,7 @@ const dbWith = (
       permission: 1 << 8, // WEBDAV_READ
       base_path: "/local",
       disabled: false,
+      groups: [1],
     },
     {
       id: 2,
@@ -74,6 +75,7 @@ const dbWith = (
       disabled: false,
     },
   ],
+  groups: [{ id: 1, name: "all", scopes: [{ path: "/", permission: 0 }] }],
   shares: [],
   metas: [],
 })
