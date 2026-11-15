@@ -23,6 +23,10 @@ export interface UploadItem {
   error: string
   batch: number
   controller: AbortController | null
+  /** Epoch milliseconds when the upload was queued or last retried. */
+  startedAt: number
+  /** Epoch milliseconds when it reached a final state, 0 while pending. */
+  endedAt: number
 }
 
 export interface UploadSource {
@@ -109,6 +113,7 @@ async function run(item: UploadItem): Promise<void> {
     }
   } finally {
     item.controller = null
+    item.endedAt = Date.now()
     pump()
     settleBatch(item.batch)
   }
@@ -124,6 +129,7 @@ function pump(): void {
 export function cancelUpload(item: UploadItem): void {
   if (item.status === "queued") {
     item.status = "cancelled"
+    item.endedAt = Date.now()
     settleBatch(item.batch)
   } else if (item.status === "uploading") item.controller?.abort()
 }
@@ -137,6 +143,8 @@ export function retryUpload(item: UploadItem): void {
   item.status = "queued"
   item.error = ""
   item.loaded = 0
+  item.startedAt = Date.now()
+  item.endedAt = 0
   if (!batchDirs.has(item.batch)) batchDirs.set(item.batch, item.dir)
   pump()
 }
@@ -208,6 +216,8 @@ export async function enqueueUploads(dir: string, selection: UploadSelection): P
     error: "",
     batch,
     controller: null,
+    startedAt: Date.now(),
+    endedAt: 0,
   }))
   if (!items.length) {
     if (selection.dirs.length) listeners.forEach((fn) => fn(dir))

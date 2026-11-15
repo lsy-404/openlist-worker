@@ -8,6 +8,7 @@ export const router = createRouter({
   history: createWebHistory("/"),
   routes: [
     { path: "/@login", component: LoginView },
+    { path: "/@tasks", component: () => import("@/tasks/TasksView.vue") },
     adminRoute,
     { path: "/:pathMatch(.*)*", components: { default: BrowseView, sidebar: BrowseSidebar } },
   ],
