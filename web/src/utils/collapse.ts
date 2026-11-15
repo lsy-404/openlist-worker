@@ -4,6 +4,8 @@ function box(el: Element): HTMLElement {
 }
 
 export const collapse = {
+  // A height that does not change fires no transitionend, so the end is timed rather than awaited
+  duration: { enter: 270, leave: 190 },
   onBeforeEnter(el: Element) {
     box(el).style.height = "0"
   },
