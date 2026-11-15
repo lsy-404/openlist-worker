@@ -14,11 +14,11 @@ import type { PreviewProps } from "./registry"
 import { useTextFile } from "./useTextFile"
 
 const { t } = useI18n()
-const props = defineProps<PreviewProps>()
+const props = defineProps<PreviewProps & { startMode?: "rendered" | "source" }>()
 
 const { status, text, encoding, error, load } = useTextFile(() => ({ url: props.downloadUrl, size: props.file.size }))
 const markdown = computed(() => isMarkdown(props.file))
-const mode = ref<"rendered" | "source">("rendered")
+const mode = ref<"rendered" | "source">(props.startMode ?? "rendered")
 const wrap = ref(true)
 const language = computed(() => languageFor(props.file.name))
 const modes = computed(() => [

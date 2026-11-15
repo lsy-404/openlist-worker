@@ -1,19 +1,11 @@
 import { computed, reactive, shallowRef, watch } from "vue"
 import { useRouter } from "vue-router"
-import { api, type FsEntry } from "@/api"
-import { passwordFor } from "@/stores/passwords"
+import type { FsEntry } from "@/api"
+import { listFolder } from "./folder"
 import { encodePath, joinPath, parentPath, splitPath } from "@/utils/path"
 
-const listings = new Map<string, FsEntry[]>()
-
-async function listFiles(dir: string): Promise<FsEntry[]> {
-  const cached = listings.get(dir)
-  if (cached) return cached
-  const list = await api.fsList(dir, passwordFor(dir))
-  const files = (list.content ?? []).filter((e) => !e.is_dir)
-  listings.set(dir, files)
-  return files
-}
+/** Set when a player moved on by itself, so the next file starts without another click. */
+export const handoff = { play: false }
 
 /** Previous/next files of the same kind in the file's folder. */
 export function useSiblings(
@@ -28,17 +20,12 @@ export function useSiblings(
   watch(
     () => source().path,
     async () => {
-      const related = source().related?.filter((e) => !e.is_dir) ?? []
-      if (related.length > 1) {
-        entries.value = related
-        return
-      }
       const target = dir.value
       try {
-        const files = await listFiles(target)
+        const files = (await listFolder(target)).files
         if (target === dir.value) entries.value = files
       } catch {
-        entries.value = []
+        entries.value = source().related?.filter((e) => !e.is_dir) ?? []
       }
     },
     { immediate: true },
@@ -47,17 +34,27 @@ export function useSiblings(
   const siblings = computed(() => entries.value.filter((e) => accept(e) || e.name === name.value))
   const index = computed(() => siblings.value.findIndex((e) => e.name === name.value))
 
-  function go(offset: number) {
+  function go(offset: number, play = false) {
     const target = siblings.value[index.value + offset]
-    if (target) void router.push(encodePath(joinPath(dir.value, target.name)))
+    if (!target) return
+    handoff.play = play
+    void router.push(encodePath(joinPath(dir.value, target.name)))
   }
 
   return reactive({
+    dir,
+    /** Every file of the folder, whatever its kind. */
+    all: entries,
+    siblings,
     index,
     total: computed(() => siblings.value.length),
     hasPrev: computed(() => index.value > 0),
     hasNext: computed(() => index.value >= 0 && index.value < siblings.value.length - 1),
     prev: () => go(-1),
-    next: () => go(1),
+    next: (play = false) => go(1, play),
+    goTo: (name: string) => {
+      handoff.play = true
+      void router.push(encodePath(joinPath(dir.value, name)))
+    },
   })
 }

@@ -4,17 +4,16 @@ import { FluentButton, FluentSvgIcon } from "@platform-kit/fluent/vue"
 import { previewIcons } from "./icons"
 
 const { t } = useI18n()
-defineProps<{ index: number; total: number; hasPrev: boolean; hasNext: boolean }>()
-defineEmits<{ prev: []; next: [] }>()
+defineProps<{ nav: { index: number; total: number; hasPrev: boolean; hasNext: boolean; prev(): void; next(): void } }>()
 </script>
 
 <template>
-  <div v-if="total > 1" class="nav">
-    <FluentButton tone="subtle" icon-only :disabled="!hasPrev" :aria-label="t('preview.siblings.prev')" @click="$emit('prev')">
+  <div v-if="nav.total > 1" class="nav">
+    <FluentButton tone="subtle" icon-only :disabled="!nav.hasPrev" :aria-label="t('preview.siblings.prev')" @click="nav.prev()">
       <FluentSvgIcon :svg="previewIcons.chevronLeft" :size="18" />
     </FluentButton>
-    <span class="nav__count">{{ index + 1 }} / {{ total }}</span>
-    <FluentButton tone="subtle" icon-only :disabled="!hasNext" :aria-label="t('preview.siblings.next')" @click="$emit('next')">
+    <span class="nav__count">{{ nav.index + 1 }} / {{ nav.total }}</span>
+    <FluentButton tone="subtle" icon-only :disabled="!nav.hasNext" :aria-label="t('preview.siblings.next')" @click="nav.next()">
       <FluentSvgIcon :svg="previewIcons.chevronRight" :size="18" />
     </FluentButton>
   </div>
