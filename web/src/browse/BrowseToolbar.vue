@@ -1,10 +1,9 @@
 <script setup lang="ts">
-import { computed } from "vue"
 import { useI18n } from "vue-i18n"
-import { useRoute, useRouter } from "vue-router"
 import { FluentButton, FluentSvgIcon } from "@platform-kit/fluent/vue"
 import Breadcrumb from "@/components/Breadcrumb.vue"
 import FolderFilter from "@/search/FolderFilter.vue"
+import { canGoBack, canGoForward, goBack, goForward } from "@/tabs/store"
 import { browseIcons, icons } from "@/utils/icons"
 import CommandBar from "./CommandBar.vue"
 import type { Commands } from "./commands"
@@ -13,25 +12,16 @@ const props = defineProps<{ path: string; commands: Commands | null; filterable:
 const emit = defineEmits<{ up: []; refresh: [] }>()
 
 const { t } = useI18n()
-const route = useRoute()
-const router = useRouter()
-
-// vue-router records the neighbouring history positions in history.state
-const history = computed(() => {
-  void route.fullPath
-  const state = window.history.state ?? {}
-  return { back: !!state.back, forward: !!state.forward }
-})
 </script>
 
 <template>
   <div class="toolbar">
     <div class="toolbar__nav">
       <div class="toolbar__buttons">
-        <FluentButton tone="subtle" icon-only :disabled="!history.back" :aria-label="t('explorer.nav.back')" :title="t('explorer.nav.back')" @click="router.back()">
+        <FluentButton tone="subtle" icon-only :disabled="!canGoBack" :aria-label="t('explorer.nav.back')" :title="t('explorer.nav.back')" @click="goBack">
           <FluentSvgIcon :svg="icons.arrowLeft" :size="20" />
         </FluentButton>
-        <FluentButton tone="subtle" icon-only :disabled="!history.forward" :aria-label="t('explorer.nav.forward')" :title="t('explorer.nav.forward')" @click="router.forward()">
+        <FluentButton tone="subtle" icon-only :disabled="!canGoForward" :aria-label="t('explorer.nav.forward')" :title="t('explorer.nav.forward')" @click="goForward">
           <FluentSvgIcon :svg="browseIcons.arrowRight" :size="20" />
         </FluentButton>
         <FluentButton tone="subtle" icon-only :disabled="path === '/'" :aria-label="t('explorer.nav.up')" :title="t('explorer.nav.up')" @click="emit('up')">
