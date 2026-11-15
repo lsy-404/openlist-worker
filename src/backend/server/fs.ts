@@ -292,7 +292,7 @@ fsRouter.post("/dirs", async (c) => {
     }
     const { content } = await listItems(reqPath, requestContext)
     const dirs = content
-      .filter((item: any) => item.is_dir)
+      .filter((item: any) => item.is_dir && !isHidden(dirMeta, reqPath, item.name))
       .map((item: any) => ({
         name: item.name,
         modified: item.modified || new Date().toISOString(),
