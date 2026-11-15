@@ -88,6 +88,9 @@ th {
   font-size: 0.8rem;
   font-weight: 600;
 }
+tbody tr {
+  transition: var(--motion-fill);
+}
 tbody tr:hover {
   background: var(--fluent-control-hover);
 }
@@ -105,9 +108,13 @@ tbody tr:hover {
   height: 40px;
   border-radius: var(--fluent-radius);
   background: var(--fluent-control-hover);
-  animation: table-pulse 1.2s ease-in-out infinite;
+  animation: table-pulse calc(1200ms * var(--fluent-motion-scale)) linear infinite;
 }
 @keyframes table-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
   50% {
     opacity: 0.5;
   }

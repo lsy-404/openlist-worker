@@ -36,7 +36,9 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey))
         <aside class="frame__pane" :class="{ 'frame__pane--open': open }" :aria-label="t('shell.header.navigation')">
           <slot name="sidebar" />
         </aside>
-        <div v-if="open" class="frame__scrim" aria-hidden="true" @click="open = false" />
+        <Transition name="scrim">
+          <div v-if="open" class="frame__scrim" aria-hidden="true" @click="open = false" />
+        </Transition>
       </template>
       <div class="frame__card" :class="{ 'frame__card--flush': !sidebar, 'frame__card--tabs': showTabs }">
         <TabStrip v-if="showTabs" class="frame__tabs" />
@@ -140,13 +142,15 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey))
     transform: translateX(-102%);
     visibility: hidden;
     transition:
-      transform var(--fluent-normal, 0.2s) var(--fluent-ease, ease),
-      visibility 0s linear var(--fluent-normal, 0.2s);
+      transform var(--fluent-fast) var(--fluent-ease-accelerate),
+      visibility 0s linear var(--fluent-fast);
   }
   .frame__pane--open {
     transform: none;
     visibility: visible;
-    transition-delay: 0s;
+    transition:
+      transform var(--fluent-normal) var(--fluent-ease),
+      visibility 0s;
   }
   .frame__scrim {
     display: block;
@@ -154,6 +158,16 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey))
     inset: 56px 0 0;
     z-index: 8;
     background: rgba(0, 0, 0, 0.35);
+  }
+  .scrim-enter-active {
+    transition: opacity var(--fluent-normal) var(--fluent-ease);
+  }
+  .scrim-leave-active {
+    transition: opacity var(--fluent-fast) var(--fluent-ease-accelerate);
+  }
+  .scrim-enter-from,
+  .scrim-leave-to {
+    opacity: 0;
   }
 }
 </style>

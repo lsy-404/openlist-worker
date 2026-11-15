@@ -7,6 +7,8 @@ import { prefs } from "@/stores/prefs"
 import { session } from "@/stores/session"
 import { icons } from "@/utils/icons"
 import { normalizePath } from "@/utils/path"
+import { collapse } from "@/utils/collapse"
+import { useSlidingIndicator } from "@/utils/slidingIndicator"
 import SidebarNode from "./SidebarNode.vue"
 import { loadChildren, resetTree, revealPath, tree } from "./tree"
 
@@ -15,6 +17,7 @@ const SECTION = "locations"
 const { t } = useI18n()
 const route = useRoute()
 const root = ref<HTMLElement | null>(null)
+const bar = ref<HTMLElement | null>(null)
 
 const current = computed(() => normalizePath([route.params.pathMatch].flat().join("/")))
 const collapsed = computed(() => prefs.sidebar.collapsed.includes(SECTION))
@@ -33,6 +36,7 @@ async function reveal() {
 }
 
 watch(current, reveal, { immediate: true })
+useSlidingIndicator(root, bar, "[aria-current='page']", () => current.value)
 watch(
   () => session.user?.username,
   () => {
@@ -54,21 +58,39 @@ watch(
         <FluentSvgIcon class="section__chevron" :class="{ 'section__chevron--open': !collapsed }" :svg="icons.chevronRight" :size="12" />
         {{ t("explorer.sidebar.locations") }}
       </button>
-      <ul v-show="!collapsed" class="tree">
-        <SidebarNode v-for="name in top" :key="name" :path="`/${name}`" :name="name" :depth="0" :current="current" />
-        <li v-if="tree.get('/')?.loading" class="hint">{{ t("explorer.sidebar.loading") }}</li>
-        <li v-else-if="tree.get('/')?.error" class="hint">{{ t("explorer.sidebar.loadFailed") }}</li>
-        <li v-else-if="tree.get('/')?.dirs && !top.length" class="hint">{{ t("explorer.sidebar.noFolders") }}</li>
-      </ul>
+      <Transition name="collapse" v-bind="collapse">
+        <ul v-show="!collapsed" class="tree">
+          <SidebarNode v-for="name in top" :key="name" :path="`/${name}`" :name="name" :depth="0" :current="current" />
+          <li v-if="tree.get('/')?.loading" class="hint">{{ t("explorer.sidebar.loading") }}</li>
+          <li v-else-if="tree.get('/')?.error" class="hint">{{ t("explorer.sidebar.loadFailed") }}</li>
+          <li v-else-if="tree.get('/')?.dirs && !top.length" class="hint">{{ t("explorer.sidebar.noFolders") }}</li>
+        </ul>
+      </Transition>
     </section>
+    <span ref="bar" class="nav__bar" aria-hidden="true" />
   </nav>
 </template>
 
 <style scoped>
 .nav {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+.nav__bar {
+  position: absolute;
+  inset-inline-start: 0;
+  top: 0;
+  width: 3px;
+  height: 16px;
+  border-radius: 2px;
+  background: var(--fluent-accent);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform var(--fluent-normal) var(--motion-ease-move),
+    opacity var(--fluent-fast) var(--fluent-ease);
 }
 .item {
   position: relative;
@@ -80,6 +102,7 @@ watch(
   border-radius: var(--fluent-radius);
   color: var(--fluent-text);
   text-decoration: none;
+  transition: var(--motion-fill);
 }
 .item:hover {
   background: var(--fluent-control-hover);
@@ -90,16 +113,6 @@ watch(
 }
 .item--active {
   background: var(--fluent-selection);
-}
-.item--active::before {
-  content: "";
-  position: absolute;
-  inset-inline-start: 0;
-  top: 10px;
-  bottom: 10px;
-  width: 3px;
-  border-radius: 2px;
-  background: var(--fluent-accent);
 }
 .section {
   display: flex;
@@ -122,6 +135,7 @@ watch(
   font-weight: 600;
   text-align: start;
   cursor: pointer;
+  transition: var(--motion-fill);
 }
 .section__heading:hover {
   background: var(--fluent-control-hover);
@@ -131,7 +145,7 @@ watch(
   outline-offset: -2px;
 }
 .section__chevron {
-  transition: transform var(--fluent-fast, 0.1s) var(--fluent-ease, ease);
+  transition: transform var(--fluent-fast) var(--fluent-ease);
 }
 .section__chevron--open {
   transform: rotate(90deg);

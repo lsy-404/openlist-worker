@@ -224,6 +224,7 @@ function ariaSort(key: SortKey) {
   font: inherit;
   cursor: pointer;
   border-radius: var(--fluent-radius);
+  transition: var(--motion-fill);
 }
 .head__cell:hover {
   background: var(--fluent-control-hover);
@@ -248,6 +249,7 @@ function ariaSort(key: SortKey) {
   align-items: center;
   padding: 0 4px 0 12px;
   border-radius: var(--fluent-radius);
+  transition: var(--motion-fill);
 }
 .entry:hover {
   background: var(--fluent-control-hover);
@@ -353,6 +355,9 @@ function ariaSort(key: SortKey) {
   display: block;
   padding: 0;
   border: 1px solid transparent;
+  transition:
+    var(--motion-fill),
+    border-color var(--fluent-faster) var(--fluent-ease);
 }
 [data-view="grid"] .entry:hover {
   border-color: var(--fluent-border);
@@ -404,6 +409,10 @@ function ariaSort(key: SortKey) {
   top: 4px;
   inset-inline-end: 4px;
   opacity: 0;
+  transition:
+    opacity var(--fluent-faster) var(--fluent-ease),
+    background var(--fluent-fast) var(--fluent-ease),
+    border-color var(--fluent-fast) var(--fluent-ease);
 }
 [data-view="grid"] .entry:hover .entry__more,
 [data-view="grid"] .entry__more:focus-visible {
@@ -423,6 +432,7 @@ function ariaSort(key: SortKey) {
   top: 6px;
   bottom: auto;
   opacity: 0;
+  transition: opacity var(--fluent-faster) var(--fluent-ease);
 }
 [data-view="grid"] .entry:hover .entry__check,
 [data-view="grid"] .entry__check:focus-within,

@@ -60,6 +60,19 @@ function up() {
   if (path.value !== "/") router.push(encodePath(parentPath(path.value)))
 }
 
+const entering = ref<HTMLElement | null>(null)
+watch(
+  () => resource.value?.path,
+  (value) => {
+    const el = entering.value
+    if (!value || !el) return
+    el.classList.remove("enter")
+    void el.offsetWidth
+    el.classList.add("enter")
+  },
+  { flush: "post" },
+)
+
 const list = computed(() => (resource.value?.kind === "folder" ? resource.value.list : null))
 // Commands follow the listing on screen, which lags the route while the next folder loads
 const listPath = computed(() => resource.value?.path ?? path.value)
@@ -111,7 +124,7 @@ watch(resource, (value) => {
       </StateMessage>
 
       <template v-else-if="resource">
-        <div :inert="loading || undefined" :class="{ stale: loading }">
+        <div ref="entering" class="resource" :inert="loading || undefined" :class="{ stale: loading }">
           <FolderView
             v-if="resource.kind === 'folder'"
             :path="resource.path"
@@ -154,9 +167,15 @@ watch(resource, (value) => {
   right: 0;
   z-index: 1;
 }
+.resource {
+  transition: opacity var(--fluent-faster) var(--motion-ease-move);
+}
 .stale {
   opacity: 0.55;
-  transition: opacity var(--fluent-fast) var(--fluent-ease);
+  transition: opacity var(--fluent-fast) var(--motion-ease-move) var(--fluent-fast);
+}
+.enter {
+  animation: motion-rise var(--fluent-normal) var(--fluent-ease) backwards;
 }
 .skeleton {
   display: flex;

@@ -220,7 +220,7 @@ onBeforeUnmount(() => {
 .lyrics__line {
   margin: 0;
   padding: 3px 8px;
-  transition: color var(--fluent-fast, 0.1s);
+  transition: color var(--fluent-fast) var(--fluent-ease);
 }
 .lyrics__line--active {
   color: var(--fluent-text);
@@ -246,6 +246,7 @@ onBeforeUnmount(() => {
   background: none;
   border: 0;
   cursor: pointer;
+  transition: var(--motion-fill);
 }
 .playlist__item:hover {
   background: var(--fluent-control-hover);

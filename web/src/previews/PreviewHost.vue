@@ -22,10 +22,28 @@ const compact = computed(() => options.value.length > 4)
       <FluentSelect v-if="compact" :model-value="current.key" :options="options" :label="t('preview.viewerLabel')" @update:model-value="chosen = $event" />
       <FluentSegmented v-else :model-value="current.key" :options="options" :label="t('preview.viewerLabel')" @update:model-value="chosen = String($event)" />
     </PreviewToolbar>
-    <component
-      :is="current.component"
-      :key="current.key"
-      v-bind="{ ...current.props, file, path, downloadUrl }"
-    />
+    <Transition name="viewer" mode="out-in">
+      <div :key="current.key">
+        <component :is="current.component" v-bind="{ ...current.props, file, path, downloadUrl }" />
+      </div>
+    </Transition>
   </div>
 </template>
+
+<style scoped>
+.viewer-enter-active {
+  transition:
+    opacity var(--fluent-normal) var(--fluent-ease),
+    transform var(--fluent-normal) var(--fluent-ease);
+}
+.viewer-leave-active {
+  transition: opacity var(--fluent-faster) var(--fluent-ease-accelerate);
+}
+.viewer-enter-from {
+  opacity: 0;
+  transform: translateY(var(--motion-rise));
+}
+.viewer-leave-to {
+  opacity: 0;
+}
+</style>

@@ -189,6 +189,7 @@ watch(() => props.path, () => void load(), { immediate: true })
   border: 0;
   border-bottom: 1px solid var(--fluent-border);
   cursor: pointer;
+  transition: var(--motion-fill);
 }
 .row:disabled {
   cursor: default;

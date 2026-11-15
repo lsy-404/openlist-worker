@@ -106,6 +106,57 @@ body {
 a {
   color: var(--fluent-accent-link);
 }
+.fluent-theme,
+[data-fluent-theme],
+[data-fluent-speed],
+[data-fluent-reduced-motion] {
+  --motion-ease-move: cubic-bezier(0.33, 0, 0.67, 1);
+  --motion-rise: 12px;
+  --motion-fill: background-color var(--fluent-faster) var(--fluent-ease), color var(--fluent-faster) var(--fluent-ease);
+}
+.collapse-enter-active,
+.collapse-leave-active {
+  overflow: hidden;
+}
+.collapse-enter-active {
+  transition:
+    height var(--fluent-normal) var(--fluent-ease),
+    opacity var(--fluent-normal) var(--fluent-ease);
+}
+.collapse-leave-active {
+  transition:
+    height var(--fluent-fast) var(--fluent-ease-accelerate),
+    opacity var(--fluent-fast) var(--fluent-ease-accelerate);
+}
+.collapse-enter-from,
+.collapse-leave-to {
+  opacity: 0;
+}
+@keyframes motion-rise {
+  from {
+    opacity: 0;
+    transform: translateY(var(--motion-rise));
+  }
+}
+.fluent-dialog {
+  transition:
+    opacity var(--fluent-fast) var(--fluent-ease-accelerate),
+    overlay var(--fluent-fast) allow-discrete,
+    display var(--fluent-fast) allow-discrete;
+}
+.fluent-dialog::backdrop {
+  transition:
+    opacity var(--fluent-fast) var(--fluent-ease-accelerate),
+    overlay var(--fluent-fast) allow-discrete,
+    display var(--fluent-fast) allow-discrete;
+}
+.fluent-dialog:not([open]) {
+  opacity: 0;
+  pointer-events: none;
+}
+.fluent-dialog:not([open])::backdrop {
+  opacity: 0;
+}
 .fluent-button {
   display: inline-flex;
   align-items: center;

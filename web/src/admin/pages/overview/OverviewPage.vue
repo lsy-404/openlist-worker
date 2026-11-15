@@ -162,6 +162,7 @@ const version = computed(() => (typeof session.settings?.version === "string" ? 
   border-radius: var(--fluent-radius);
   color: inherit;
   text-decoration: none;
+  transition: var(--motion-fill);
 }
 .card:hover {
   background: rgb(128 128 128 / 0.1);

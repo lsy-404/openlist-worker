@@ -61,6 +61,7 @@ const { t } = useI18n()
   background: transparent;
   color: inherit;
   cursor: pointer;
+  transition: var(--motion-fill);
 }
 .filter__clear:hover {
   background: var(--fluent-control-hover);
