@@ -1,5 +1,6 @@
 import "./builtin"
 import "./fileops"
+import "./share"
 import "@/tabs/action"
 
 export { actionLabel, actionsFor, registerAction, unregisterAction } from "./registry"

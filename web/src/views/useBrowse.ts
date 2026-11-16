@@ -2,6 +2,7 @@ import { onBeforeUnmount, ref, shallowRef, watch, type Ref } from "vue"
 import { api, ApiError, clearToken, getToken, type FsFile, type FsList } from "@/api"
 import { forgetPassword, passwordFor, rememberPassword } from "@/stores/passwords"
 import { isAdmin, isGuest, loadUser, session } from "@/stores/session"
+import { isSharePath, shareRoot } from "@/utils/path"
 
 export type Resource =
   | { kind: "folder"; path: string; list: FsList }
@@ -9,14 +10,17 @@ export type Resource =
 
 async function fetchResource(path: string, password: string, refresh: boolean, signal: AbortSignal): Promise<Resource> {
   const opts = { signal, refresh }
-  // Folder or file is unknown up front: list first, and fall back to the file lookup when the path is not a folder
-  const meta = api.fsGet(path, password, opts)
-  meta.catch(() => undefined)
+  // Folder or file is unknown up front: list first, and fall back to the file lookup when the path is not a folder.
+  // Every share request counts against its access limit, so the lookup waits until needed there.
+  const lookup = () => api.fsGet(path, password, opts)
+  const eager = isSharePath(path) ? null : lookup()
+  eager?.catch(() => undefined)
   try {
     return { kind: "folder", path, list: await api.fsList(path, password, opts) }
   } catch (err) {
-    if (!(err instanceof ApiError) || err.kind !== "server") throw err
-    const file = await meta.catch(() => null)
+    const listFailed = err instanceof ApiError && (err.kind === "server" || (err.kind === "not-found" && isSharePath(path)))
+    if (!listFailed) throw err
+    const file = await (eager ?? lookup()).catch(() => null)
     if (!file || file.is_dir) throw err
     return { kind: "file", path, file }
   }
@@ -64,14 +68,14 @@ export function useBrowse(path: Ref<string>) {
         }
       }
       if (current.signal.aborted) return
-      if (supplied) rememberPassword(target, password)
+      if (supplied) rememberPassword(shareRoot(target) ?? target, password)
       resource.value = result
       locked.value = false
       wrongPassword.value = false
     } catch (err) {
       if (current.signal.aborted) return
       resource.value = null
-      if (err instanceof ApiError && err.kind === "forbidden" && hasNoGroups()) {
+      if (err instanceof ApiError && err.kind === "forbidden" && !isSharePath(target) && hasNoGroups()) {
         noAccess.value = true
       } else if (err instanceof ApiError && err.kind === "forbidden") {
         // A saved password that no longer works is discarded so the dialog starts clean

@@ -5,16 +5,20 @@ import { RouterLink, useRouter } from "vue-router"
 import { FluentMenu, FluentSvgIcon } from "@platform-kit/fluent/vue"
 import { useMedia } from "@/browse/useMedia"
 import { icons } from "@/utils/icons"
-import { encodePath, normalizePath, splitPath } from "@/utils/path"
+import { encodePath, isSharePath, normalizePath, splitPath } from "@/utils/path"
 
 const { t } = useI18n()
 const router = useRouter()
 const props = defineProps<{ path: string }>()
 
 const compact = useMedia("(max-width: 640px)")
+// Inside a share the root icon stands for the share itself, so nothing outside it is shown or reachable
+const share = computed(() => isSharePath(props.path))
+const base = computed(() => (share.value ? 2 : 0))
+const root = computed(() => (share.value ? encodePath(splitPath(props.path).slice(0, 2).join("/")) : "/"))
 const crumbs = computed(() => {
   const parts = splitPath(props.path)
-  return parts.map((name, i) => ({ name, to: encodePath(parts.slice(0, i + 1).join("/")) }))
+  return parts.slice(base.value).map((name, i) => ({ name, to: encodePath(parts.slice(0, base.value + i + 1).join("/")) }))
 })
 // On phones only the last segment stays inline; the rest move into a menu
 const hidden = computed(() => (compact.value ? crumbs.value.slice(0, -1) : []))
@@ -39,6 +43,7 @@ const draft = ref("")
 const field = ref<HTMLInputElement | null>(null)
 
 async function edit() {
+  if (share.value) return
   draft.value = normalizePath(props.path)
   editing.value = true
   await nextTick()
@@ -71,8 +76,8 @@ function go() {
     <nav v-else ref="scroller" class="crumbs" :aria-label="t('browse.breadcrumb.label')">
       <ol>
         <li>
-          <RouterLink to="/" class="crumb crumb--home" :title="t('browse.breadcrumb.root')" :aria-label="t('browse.breadcrumb.root')">
-            <FluentSvgIcon :svg="icons.home" :size="18" />
+          <RouterLink :to="root" class="crumb crumb--home" :title="t('browse.breadcrumb.root')" :aria-label="t('browse.breadcrumb.root')">
+            <FluentSvgIcon :svg="share ? icons.share : icons.home" :size="18" />
           </RouterLink>
         </li>
         <li v-if="hidden.length">
@@ -95,7 +100,7 @@ function go() {
           <span v-if="i === visible.length - 1" class="crumb crumb--current" aria-current="page">{{ crumb.name }}</span>
           <RouterLink v-else :to="crumb.to" class="crumb">{{ crumb.name }}</RouterLink>
         </li>
-        <li class="fill" :title="t('explorer.nav.editAddress')" @click="edit" />
+        <li class="fill" :title="share ? undefined : t('explorer.nav.editAddress')" @click="edit" />
       </ol>
     </nav>
   </div>

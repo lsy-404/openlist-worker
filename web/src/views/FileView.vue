@@ -11,14 +11,15 @@ import { findPreview } from "@/previews"
 import { formatDate, formatSize } from "@/utils/format"
 import { iconForEntry } from "@/utils/icons"
 import { entryDownloadUrl } from "@/utils/links"
-import { encodePath } from "@/utils/path"
+import { encodePath, isSharePath } from "@/utils/path"
 
 const { t } = useI18n()
 const props = defineProps<{ path: string; file: FsFile }>()
 const emit = defineEmits<{ refresh: [] }>()
 const router = useRouter()
 
-const downloadUrl = computed(() => props.file.raw_url || entryDownloadUrl(props.path, props.file.sign))
+// Share downloads carry the share password, which raw_url omits
+const downloadUrl = computed(() => (isSharePath(props.path) ? entryDownloadUrl(props.path, "") : props.file.raw_url || entryDownloadUrl(props.path, props.file.sign)))
 const preview = computed(() => findPreview(props.file))
 const ctx = computed(() =>
   createActionContext(

@@ -6,10 +6,12 @@ import { FluentButton, FluentTheme } from "@platform-kit/fluent/vue"
 import AppFrame from "@/components/AppFrame.vue"
 import FileOpsHost from "@/components/FileOpsHost.vue"
 import StateMessage from "@/components/StateMessage.vue"
+import ShareDialog from "@/shares/ShareDialog.vue"
 import ToastHost from "@/components/ToastHost.vue"
 import { prefs, resolvedTheme } from "@/stores/prefs"
 import { loadSession, session, siteTitle } from "@/stores/session"
 import { icons } from "@/utils/icons"
+import { isSharePath } from "@/utils/path"
 
 const { t } = useI18n()
 const route = useRoute()
@@ -45,7 +47,7 @@ watchEffect(() => {
 })
 
 watchEffect(() => {
-  if (route.path.startsWith("/@") && !route.path.startsWith("/@manage")) document.title = siteTitle.value
+  if (route.path.startsWith("/@") && !route.path.startsWith("/@manage") && !isSharePath(route.path)) document.title = siteTitle.value
 })
 
 watchEffect(() => {
@@ -79,6 +81,7 @@ async function retry() {
       <RouterView v-else />
     </AppFrame>
     <FileOpsHost />
+    <ShareDialog />
     <ToastHost />
   </FluentTheme>
 </template>

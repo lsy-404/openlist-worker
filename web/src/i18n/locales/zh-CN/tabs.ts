@@ -2,6 +2,7 @@ export default {
   label: "标签页",
   home: "主页",
   tasks: "任务",
+  shares: "分享",
   new: "新建标签页",
   close: "关闭标签页 {name}",
   closeShort: "关闭",

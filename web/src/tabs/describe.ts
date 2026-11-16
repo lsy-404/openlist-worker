@@ -2,8 +2,10 @@ import type { Router } from "vue-router"
 import { t } from "@/i18n"
 import { extension } from "@/utils/format"
 import { iconForEntry, icons } from "@/utils/icons"
-import { splitPath } from "@/utils/path"
+import { isSharePath, splitPath } from "@/utils/path"
 import { singletonOf } from "./store"
+
+const SINGLETON_ICONS: Record<string, string> = { "/@manage": icons.settings, "/@tasks": icons.textBulletList, "/@shares": icons.share }
 
 export interface TabLook {
   title: string
@@ -17,10 +19,12 @@ export function describeLocation(router: Router, location: string): TabLook {
   if (kind) {
     const key = resolved.meta.title as string | undefined
     const title = key ? t(key) : kind === "/@manage" ? t("shell.header.admin") : t("tabs.tasks")
-    return { title, icon: kind === "/@manage" ? icons.settings : icons.textBulletList }
+    return { title, icon: SINGLETON_ICONS[kind] }
   }
-  const name = splitPath(decodeURIComponent(resolved.path)).pop()
+  const parts = splitPath(decodeURIComponent(resolved.path))
+  const name = parts.pop()
   if (!name) return { title: t("tabs.home"), icon: icons.home }
+  if (isSharePath(resolved.path) && parts.length <= 1) return { title: name, icon: icons.share }
   // Folders and files share the URL space, so a dotted last segment is taken to be a file
   return { title: name, icon: iconForEntry({ name, is_dir: extension(name) === "", type: 0 }) }
 }

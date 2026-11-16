@@ -12,7 +12,7 @@ import PasswordDialog from "@/components/PasswordDialog.vue"
 import StateMessage from "@/components/StateMessage.vue"
 import { siteTitle } from "@/stores/session"
 import { icons } from "@/utils/icons"
-import { encodePath, isReservedPath, normalizePath, parentPath, splitPath } from "@/utils/path"
+import { encodePath, isReservedPath, isSharePath, normalizePath, parentPath, shareRoot, splitPath } from "@/utils/path"
 import FileView from "./FileView.vue"
 import FolderView from "./FolderView.vue"
 import { findRematch } from "./rematch"
@@ -22,8 +22,9 @@ const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 
-const path = computed(() => normalizePath([route.params.pathMatch].flat().join("/")))
+const path = computed(() => normalizePath((route.meta.share ? "/@s/" : "/") + [route.params.pathMatch].flat().join("/")))
 const reserved = computed(() => isReservedPath(path.value))
+const share = computed(() => isSharePath(path.value))
 
 const { resource, loading, error, locked, noAccess, wrongPassword, submitting, reload, submitPassword } = useBrowse(path)
 
@@ -38,7 +39,7 @@ let rematch: AbortController | null = null
 watch(error, async (value) => {
   rematch?.abort()
   rematching.value = false
-  if (value?.kind !== "not-found" || reserved.value) return
+  if (value?.kind !== "not-found" || reserved.value || share.value) return
   const current = (rematch = new AbortController())
   rematching.value = true
   const target = await findRematch(path.value, current.signal)
@@ -56,8 +57,17 @@ watch(
   { immediate: true },
 )
 
+const SHARE_PROBLEMS: [RegExp, string][] = [
+  [/disabled/, "disabled"],
+  [/expired/, "expired"],
+  [/count exceeded/, "exhausted"],
+  [/empty/, "empty"],
+  [/not found/i, "notFound"],
+]
+const shareProblem = computed(() => (share.value && error.value ? SHARE_PROBLEMS.find(([re]) => re.test(error.value!.message))?.[1] : undefined))
+
 function up() {
-  if (path.value !== "/") router.push(encodePath(parentPath(path.value)))
+  if (path.value !== (shareRoot(path.value) ?? "/")) router.push(encodePath(parentPath(path.value)))
 }
 
 const entering = ref<HTMLElement | null>(null)
@@ -96,8 +106,13 @@ watch(resource, (value) => {
     <div class="content" :aria-busy="loading">
       <FluentProgressBar v-if="loading" class="content__bar" indeterminate :label="t('common.loading')" />
 
+      <StateMessage v-if="shareProblem" :icon="icons.warning" :title="t(`shares.link.${shareProblem}`)">
+        <FluentButton v-if="path !== shareRoot(path)" @click="up">{{ t("browse.state.up") }}</FluentButton>
+        <FluentButton tone="primary" @click="router.push('/')">{{ t("browse.state.home") }}</FluentButton>
+      </StateMessage>
+
       <StateMessage
-        v-if="notFound"
+        v-else-if="notFound"
         :icon="icons.folderOpen"
         :title="t('browse.state.notFound')"
         :detail="t('browse.state.notFoundDetail')"
@@ -140,7 +155,7 @@ watch(resource, (value) => {
 
     <PasswordDialog
       :open="dialogOpen"
-      :path="path"
+      :path="share ? splitPath(path)[1] : path"
       :wrong="wrongPassword"
       :busy="submitting"
       @submit="submitPassword"

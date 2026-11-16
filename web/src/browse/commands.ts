@@ -112,6 +112,7 @@ export function useCommands(path: Ref<string>, list: Ref<FsList | null>, reload:
       download: folder ? viaAction("download", t("files.actions.download"), icons.arrowDownload, sel, "download", "download-each") : null,
       moveTo: caps?.move ? viaAction("move", t("files.actions.move.labelTo"), icons.arrowMove, sel, "move") : null,
       copyTo: caps?.copy ? viaAction("copy-to", t("files.actions.copy.labelTo"), icons.copy, sel, "copy") : null,
+      share: find(folder, "share") ? viaAction("share", t("shares.actions.share"), icons.share, sel, "share") : null,
       copyLink: folder ? viaAction("copy-link", t("files.actions.copyLink"), icons.link, sel ?? folder, "copy-link") : null,
       selectAll: make("select-all", t("explorer.command.selectAll"), icons.selectAllOn, !entries.value.length, () => selectAll(entries.value.map((e) => e.name))),
       selectNone: make("select-none", t("explorer.command.selectNone"), icons.dismiss, !some, clearSelection),
