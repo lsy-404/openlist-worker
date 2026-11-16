@@ -83,6 +83,9 @@ importers:
       bencode:
         specifier: ^4.0.1
         version: 4.0.1
+      client-zip:
+        specifier: ^2.5.1
+        version: 2.5.1
       codemirror:
         specifier: ^6.0.2
         version: 6.0.2
@@ -785,6 +788,9 @@ packages:
   chokidar@3.6.0:
     resolution: {integrity: sha512-7VT13fmjotKpGipCW9JEQAusEPE+Ei8nl6/g4FBAmIm0GOOLMua9NDDo/DWp0ZAxCr3cPq5ZpBqmPAQgDda2Pw==}
     engines: {node: '>= 8.10.0'}
+
+  client-zip@2.5.1:
+    resolution: {integrity: sha512-yOvNSBsQX1B7wtdvIVXJEIIShrlPiX+adhli7sWvQhsx3nX1DjvpSt+AwOxaX+3DCsT/Yx0nRy5hIjRLIYfebw==}
 
   codemirror@6.0.2:
     resolution: {integrity: sha512-VhydHotNW5w1UGK0Qj96BwSk/Zqbp9WbnyK2W/eVMv4QyF41INRGpjUhFJY7/uDNuudSc33a/PKr4iDqRduvHw==}
@@ -1812,6 +1818,8 @@ snapshots:
       readdirp: 3.6.0
     optionalDependencies:
       fsevents: 2.3.3
+
+  client-zip@2.5.1: {}
 
   codemirror@6.0.2:
     dependencies:

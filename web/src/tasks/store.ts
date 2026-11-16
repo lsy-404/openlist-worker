@@ -1,10 +1,11 @@
 import { computed, reactive, ref, watch } from "vue"
 import { api } from "@/api"
 import { t } from "@/i18n"
+import { cancelPackage, clearFinishedPackages, packages, type PackageItem } from "@/stores/packages"
 import { cancelUpload, clearFinished as clearUploads, retryUpload, uploads, type UploadItem } from "@/stores/uploads"
 import { joinPath } from "@/utils/path"
 
-export type TaskKind = "upload" | "copy" | "move" | "delete" | "rename" | "mkdir"
+export type TaskKind = "upload" | "package" | "copy" | "move" | "delete" | "rename" | "mkdir"
 export type TaskState = "queued" | "running" | "succeeded" | "failed" | "cancelled"
 
 export interface Task {
@@ -172,16 +173,44 @@ function fromUpload(item: UploadItem): Task {
   }
 }
 
+const PACKAGE_STATE: Record<PackageItem["status"], TaskState> = {
+  running: "running",
+  done: "succeeded",
+  failed: "failed",
+  cancelled: "cancelled",
+}
+
+function fromPackage(item: PackageItem): Task {
+  const state = PACKAGE_STATE[item.status]
+  return {
+    id: `pk${item.id}`,
+    kind: "package",
+    title: item.name,
+    source: state === "running" ? item.current : "",
+    target: "",
+    folder: item.dir,
+    state,
+    loaded: item.loaded,
+    size: item.size,
+    startedAt: item.startedAt,
+    endedAt: item.endedAt,
+    error: item.error,
+    interrupted: false,
+    cancel: state === "running" ? () => cancelPackage(item) : undefined,
+  }
+}
+
 function fromArchived(entry: ArchivedUpload): Task {
   return { ...entry, kind: "upload", source: "" }
 }
 
 export const tasks = computed<Task[]>(() =>
-  [...ops.map(fromOp), ...uploads.items.map(fromUpload), ...archived.value.map(fromArchived)].sort((a, b) => b.startedAt - a.startedAt),
+  [...ops.map(fromOp), ...uploads.items.map(fromUpload), ...packages.items.map(fromPackage), ...archived.value.map(fromArchived)].sort((a, b) => b.startedAt - a.startedAt),
 )
 
 export const runningCount = computed(
-  () => ops.filter((o) => o.state === "running").length + uploads.items.filter((i) => i.status === "queued" || i.status === "uploading").length,
+  () => ops.filter((o) => o.state === "running").length + uploads.items.filter((i) => i.status === "queued" || i.status === "uploading").length +
+    packages.items.filter((p) => p.status === "running").length,
 )
 
 export function dismissTask(id: string): void {
@@ -190,16 +219,19 @@ export function dismissTask(id: string): void {
   archived.value = archived.value.filter((a) => a.id !== id)
   const upload = uploads.items.find((i) => `up${i.id}` === id)
   if (upload && upload.status !== "queued" && upload.status !== "uploading") uploads.items = uploads.items.filter((i) => i !== upload)
+  packages.items = packages.items.filter((p) => `pk${p.id}` !== id || p.status === "running")
 }
 
 export function clearFinishedTasks(): void {
   for (let i = ops.length - 1; i >= 0; i--) if (ops[i].state !== "running") ops.splice(i, 1)
   archived.value = []
   clearUploads()
+  clearFinishedPackages()
 }
 
 export function cancelAllTasks(): void {
   for (const item of uploads.items) cancelUpload(item)
+  for (const item of packages.items) cancelPackage(item)
 }
 
 // Only finished tasks read `loaded`, so a running upload's progress does not rewrite the storage on every tick

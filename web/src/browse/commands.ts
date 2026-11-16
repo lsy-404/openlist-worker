@@ -109,7 +109,7 @@ export function useCommands(path: Ref<string>, list: Ref<FsList | null>, reload:
           : null,
       rename: caps?.rename ? viaAction("rename", t("files.actions.rename"), icons.rename, sel, "rename") : null,
       remove: caps?.remove ? viaAction("delete", t("files.actions.delete"), icons.deleteIcon, sel, "delete") : null,
-      download: folder ? viaAction("download", t("files.actions.download"), icons.arrowDownload, sel, "download", "download-each") : null,
+      download: folder ? viaAction("download", t("files.actions.download"), icons.arrowDownload, sel, "download") : null,
       moveTo: caps?.move ? viaAction("move", t("files.actions.move.labelTo"), icons.arrowMove, sel, "move") : null,
       copyTo: caps?.copy ? viaAction("copy-to", t("files.actions.copy.labelTo"), icons.copy, sel, "copy") : null,
       share: find(folder, "share") ? viaAction("share", t("shares.actions.share"), icons.share, sel, "share") : null,

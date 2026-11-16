@@ -19,7 +19,6 @@ const messages: typeof zh = {
     newFolder: "New folder",
     rename: "Rename",
     delete: "Delete",
-    downloadEach: "Download one by one",
     move: {
       label: "Move",
       labelTo: "Move to…",
@@ -35,13 +34,18 @@ const messages: typeof zh = {
       done: "Copied {target}",
     },
   },
+  package: {
+    defaultName: "Download",
+    listFailed: "Could not list {path}: {reason}",
+    fetchFailed: "Could not download {path}: {reason}",
+    tooLarge: "This browser cannot save a package larger than 1 GB. Use a Chromium-based browser instead.",
+  },
   notices: {
     linkCopied: "Link copied",
     copyFailed: "Couldn't copy. Copy the link from the address bar instead.",
     folderCreated: "Folder created",
     renamed: "Renamed",
     deleted: "Deleted {target}",
-    skippedFolders: "Skipped {count} folders",
     nothingToUpload: "There are no files to upload",
   },
   dialogs: {
