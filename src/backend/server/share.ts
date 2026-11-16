@@ -1,11 +1,13 @@
 import { Hono } from "hono"
 import { getDb, saveDb } from "../internal/model/db"
 import { adminAuthMiddleware, getUserFromContext } from "./middlewares"
+import type { Context } from "hono"
 import {
   can,
   canInAnyScope,
   PermissionBit,
   isAdmin,
+  isGuest,
   getActualPath,
 } from "../pkg/permission"
 
@@ -20,19 +22,46 @@ function sanitizePath(p: string): string {
   return "/" + segments.join("/")
 }
 
-// 分享管理接口需要管理员权限（list/get/update/delete）
-shareRouter.use("/list", adminAuthMiddleware)
-shareRouter.use("/get", adminAuthMiddleware)
-shareRouter.use("/update", adminAuthMiddleware)
-shareRouter.use("/delete", adminAuthMiddleware)
 shareRouter.use("/cancel", adminAuthMiddleware)
-shareRouter.use("/enable", adminAuthMiddleware)
-shareRouter.use("/disable", adminAuthMiddleware)
 
-// List all shares (returns full data aligned with Go backend)
-shareRouter.get("/list", async (c) => {
+// 分享管理接口：管理员可管理全部分享，普通登录用户只能管理自己创建的分享
+shareRouter.use("/list", manageAuth)
+shareRouter.use("/get", manageAuth)
+shareRouter.use("/update", manageAuth)
+shareRouter.use("/delete", manageAuth)
+shareRouter.use("/enable", manageAuth)
+shareRouter.use("/disable", manageAuth)
+
+async function manageAuth(c: Context, next: () => Promise<void>) {
+  const user = await getUserFromContext(c)
+  if (!user || user.disabled || isGuest(user)) {
+    return c.json({ code: 401, message: "Unauthorized", data: null }, 401)
+  }
+  await next()
+}
+
+/** Shares the caller may manage: everything for admins, own shares otherwise. */
+async function manageable(c: Context): Promise<any[]> {
+  const user = await getUserFromContext(c)
   const db = await getDb(c.env)
-  const shares = db.shares || []
+  const shares = (db.shares || []).filter(
+    (s: any) => isAdmin(user) || (user!.id !== undefined && s.creator_id === user!.id),
+  )
+  // The SQL schema only keeps creator_id, so the name is resolved from the user table
+  return shares.map((s: any) => ({
+    ...s,
+    creator: db.users.find((u: any) => u.id === s.creator_id)?.username ?? s.creator ?? "",
+  }))
+}
+
+async function findManageable(c: Context, id: string) {
+  const shares = await manageable(c)
+  return shares.find((s: any) => s.id === id)
+}
+
+// List shares (returns full data aligned with Go backend)
+shareRouter.get("/list", async (c) => {
+  const shares = await manageable(c)
   return c.json({
     code: 200,
     message: "success",
@@ -42,9 +71,7 @@ shareRouter.get("/list", async (c) => {
 
 // Get a single share
 shareRouter.get("/get", async (c) => {
-  const id = c.req.query("id") || ""
-  const db = await getDb(c.env)
-  const share = (db.shares || []).find((s: any) => s.id === id)
+  const share = await findManageable(c, c.req.query("id") || "")
   if (!share) {
     return c.json({ code: 404, message: "share not found", data: null })
   }
@@ -71,10 +98,8 @@ shareRouter.post("/create", async (c) => {
   if (Array.isArray(body.files)) {
     try {
       files = body.files.map((f: string) => {
-        const clean = sanitizePath(String(f))
-        if (isAdmin(user)) return clean
-        const actual = getActualPath(user, clean)
-        if (!can(user, PermissionBit.SHARE, actual)) {
+        const actual = getActualPath(user, sanitizePath(String(f)))
+        if (!isAdmin(user) && !can(user, PermissionBit.SHARE, actual)) {
           throw new Error("Permission denied")
         }
         return actual
@@ -120,6 +145,8 @@ shareRouter.post("/create", async (c) => {
     // 对齐 Go CreateSharing：管理员恢复分享时可通过 creator/creator_role 字段
     // 保留原创建者，否则默认当前登录用户。
     creator: body.creator || user.username || "user",
+    creator_id:
+      isAdmin(user) && body.creator_id !== undefined ? body.creator_id : user.id,
     creator_role:
       body.creator_role !== undefined ? body.creator_role : (user.role ?? 1),
     accessed: body.accessed ?? 0,
@@ -158,9 +185,10 @@ shareRouter.post("/update", async (c) => {
   }
 
   const idx = (db.shares || []).findIndex((s: any) => s.id === body.id)
-  if (idx === -1) {
+  if (idx === -1 || !(await findManageable(c, body.id))) {
     return c.json({ code: 404, message: "share not found", data: null })
   }
+  const admin = isAdmin(await getUserFromContext(c))
 
   // Support renaming via new_id (must not collide with another share)
   const newId =
@@ -202,7 +230,8 @@ shareRouter.post("/update", async (c) => {
       body.extract_folder !== undefined
         ? body.extract_folder
         : db.shares[idx].extract_folder,
-    files: body.files !== undefined ? body.files : db.shares[idx].files,
+    files:
+      admin && body.files !== undefined ? body.files : db.shares[idx].files,
     remark: body.remark !== undefined ? body.remark : db.shares[idx].remark,
     readme: body.readme !== undefined ? body.readme : db.shares[idx].readme,
     header: body.header !== undefined ? body.header : db.shares[idx].header,
@@ -216,6 +245,9 @@ shareRouter.post("/delete", async (c) => {
   const id = c.req.query("id") || ""
   const db = await getDb(c.env)
   if (!db.shares) db.shares = []
+  if (!(await findManageable(c, id))) {
+    return c.json({ code: 404, message: "share not found", data: null })
+  }
   db.shares = db.shares.filter((s: any) => s.id !== id)
   await saveDb(db, c.env)
   return c.json({ code: 200, message: "success", data: null })
@@ -225,7 +257,7 @@ shareRouter.post("/delete", async (c) => {
 shareRouter.post("/enable", async (c) => {
   const id = c.req.query("id") || ""
   const db = await getDb(c.env)
-  const s = (db.shares || []).find((s: any) => s.id === id)
+  const s = (await findManageable(c, id)) && (db.shares || []).find((s: any) => s.id === id)
   if (s) {
     s.disabled = false
     await saveDb(db, c.env)
@@ -237,7 +269,7 @@ shareRouter.post("/enable", async (c) => {
 shareRouter.post("/disable", async (c) => {
   const id = c.req.query("id") || ""
   const db = await getDb(c.env)
-  const s = (db.shares || []).find((s: any) => s.id === id)
+  const s = (await findManageable(c, id)) && (db.shares || []).find((s: any) => s.id === id)
   if (s) {
     s.disabled = true
     await saveDb(db, c.env)
