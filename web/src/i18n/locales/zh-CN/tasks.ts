@@ -11,6 +11,7 @@ export default {
   },
   card: {
     upload: { running: "正在上传 {what} 到 {dest}", done: "已上传 {what} 到 {dest}", failed: "上传 {what} 到 {dest} 失败", cancelled: "已取消上传 {what}", queued: "等待上传 {what} 到 {dest}" },
+    package: { running: "正在打包 {what}", done: "已打包 {what}", failed: "打包 {what} 失败", cancelled: "已取消打包 {what}" },
     copy: { running: "正在复制 {what} 到 {dest}", done: "已复制 {what} 到 {dest}", failed: "复制 {what} 到 {dest} 失败", cancelled: "已取消复制 {what}", queued: "等待复制 {what}" },
     move: { running: "正在移动 {what} 到 {dest}", done: "已移动 {what} 到 {dest}", failed: "移动 {what} 到 {dest} 失败", cancelled: "已取消移动 {what}", queued: "等待移动 {what}" },
     delete: { running: "正在删除 {what}", done: "已删除 {what}", failed: "删除 {what} 失败", cancelled: "已取消删除 {what}", queued: "等待删除 {what}" },
@@ -43,6 +44,7 @@ export default {
   },
   kind: {
     upload: "上传",
+    package: "打包",
     copy: "复制",
     move: "移动",
     delete: "删除",

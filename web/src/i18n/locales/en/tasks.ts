@@ -13,6 +13,7 @@ const messages: typeof zh = {
   },
   card: {
     upload: { running: "Uploading {what} to {dest}", done: "Uploaded {what} to {dest}", failed: "Failed to upload {what} to {dest}", cancelled: "Cancelled uploading {what}", queued: "Waiting to upload {what} to {dest}" },
+    package: { running: "Packaging {what}", done: "Packaged {what}", failed: "Failed to package {what}", cancelled: "Cancelled packaging {what}" },
     copy: { running: "Copying {what} to {dest}", done: "Copied {what} to {dest}", failed: "Failed to copy {what} to {dest}", cancelled: "Cancelled copying {what}", queued: "Waiting to copy {what}" },
     move: { running: "Moving {what} to {dest}", done: "Moved {what} to {dest}", failed: "Failed to move {what} to {dest}", cancelled: "Cancelled moving {what}", queued: "Waiting to move {what}" },
     delete: { running: "Deleting {what}", done: "Deleted {what}", failed: "Failed to delete {what}", cancelled: "Cancelled deleting {what}", queued: "Waiting to delete {what}" },
@@ -45,6 +46,7 @@ const messages: typeof zh = {
   },
   kind: {
     upload: "Upload",
+    package: "Package",
     copy: "Copy",
     move: "Move",
     delete: "Delete",

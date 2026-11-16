@@ -17,7 +17,6 @@ export default {
     newFolder: "新建文件夹",
     rename: "重命名",
     delete: "删除",
-    downloadEach: "逐个下载",
     move: {
       label: "移动",
       labelTo: "移动到…",
@@ -33,13 +32,18 @@ export default {
       done: "已复制 {target}",
     },
   },
+  package: {
+    defaultName: "下载",
+    listFailed: "无法列出 {path}：{reason}",
+    fetchFailed: "无法下载 {path}：{reason}",
+    tooLarge: "此浏览器无法保存超过 1 GB 的压缩包，请改用基于 Chromium 的浏览器。",
+  },
   notices: {
     linkCopied: "链接已复制",
     copyFailed: "复制失败，请手动复制地址栏链接",
     folderCreated: "文件夹已创建",
     renamed: "已重命名",
     deleted: "已删除 {target}",
-    skippedFolders: "已跳过 {count} 个文件夹",
     nothingToUpload: "没有需要上传的文件",
   },
   dialogs: {

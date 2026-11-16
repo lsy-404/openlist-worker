@@ -20,6 +20,7 @@ const expanded = ref(false)
 
 const KIND_ICON: Record<TaskKind, string> = {
   upload: icons.arrowUpload,
+  package: icons.archive,
   copy: icons.copy,
   move: icons.arrowMove,
   delete: icons.deleteIcon,

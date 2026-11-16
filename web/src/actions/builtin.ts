@@ -1,6 +1,7 @@
 import { t } from "@/i18n"
+import { startPackage } from "@/stores/packages"
 import { icons } from "@/utils/icons"
-import { absoluteUrl } from "@/utils/path"
+import { absoluteUrl, splitPath } from "@/utils/path"
 import { pageUrl } from "@/utils/links"
 import { registerAction } from "./registry"
 
@@ -28,8 +29,14 @@ registerAction({
   icon: icons.arrowDownload,
   order: 10,
   primary: true,
-  when: (ctx) => ctx.kind === "file" && !!ctx.downloadUrl,
+  when: (ctx) => (ctx.kind === "file" ? !!ctx.downloadUrl : ctx.surface !== "toolbar"),
   run(ctx) {
+    if (ctx.kind === "folder") {
+      const picked = ctx.surface === "selection"
+      const name = (picked ? splitPath(ctx.dir).pop() : ctx.entry.name) || t("files.package.defaultName")
+      startPackage(ctx.dir, picked ? ctx.selection : [ctx.entry], name).catch((err) => ctx.notify(err instanceof Error ? err.message : String(err), "danger"))
+      return
+    }
     const link = document.createElement("a")
     link.href = ctx.downloadUrl!
     link.download = ctx.entry.name

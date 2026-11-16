@@ -7,7 +7,6 @@ import { enqueueUploads } from "@/stores/uploads"
 import { runOp } from "@/tasks/store"
 import { collectInput } from "@/utils/dropped"
 import { icons } from "@/utils/icons"
-import { entryDownloadUrl } from "@/utils/links"
 import { joinPath } from "@/utils/path"
 import { registerAction } from "./registry"
 import type { ActionContext } from "./registry"
@@ -182,29 +181,5 @@ registerAction({
       },
     })
     finish(ctx, changed, t("files.notices.deleted", { target: describe(ctx) }))
-  },
-})
-
-registerAction({
-  id: "download-each",
-  label: () => t("files.actions.downloadEach"),
-  icon: icons.arrowDownload,
-  order: 10,
-  when: (ctx) => ctx.surface === "selection" && ctx.selection.some((e) => !e.is_dir),
-  async run(ctx) {
-    const files = ctx.selection.filter((e) => !e.is_dir)
-    const skipped = ctx.selection.length - files.length
-    for (const entry of files) {
-      const link = document.createElement("a")
-      link.href = entryDownloadUrl(joinPath(ctx.dir, entry.name), entry.sign)
-      link.download = entry.name
-      link.rel = "noopener"
-      document.body.appendChild(link)
-      link.click()
-      link.remove()
-      // Browsers drop downloads fired in the same tick
-      await new Promise((resolve) => setTimeout(resolve, 350))
-    }
-    if (skipped) ctx.notify(t("files.notices.skippedFolders", { count: skipped }), "info")
   },
 })
