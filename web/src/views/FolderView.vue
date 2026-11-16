@@ -7,7 +7,7 @@ import EntryList from "@/components/EntryList.vue"
 import MarkdownView from "@/components/MarkdownView.vue"
 import StateMessage from "@/components/StateMessage.vue"
 import { useFolderFilter } from "@/search/useFolderFilter"
-import { entryExtension } from "@/browse/entryType"
+import { groupEntries, sortEntries } from "@/browse/arrange"
 import { prefs } from "@/stores/prefs"
 import { clearSelection } from "@/stores/selection"
 import { session } from "@/stores/session"
@@ -19,22 +19,9 @@ import { icons } from "@/utils/icons"
 const props = defineProps<{ path: string; list: FsList }>()
 const emit = defineEmits<{ refresh: [] }>()
 
-const { t, locale } = useI18n()
-const collator = computed(() => new Intl.Collator(locale.value, { numeric: true, sensitivity: "base" }))
+const { t } = useI18n()
 
-const sorted = computed(() => {
-  const dir = prefs.sortOrder === "asc" ? 1 : -1
-  const key = prefs.sortKey
-  return [...(props.list.content ?? [])].sort((a, b) => {
-    if (a.is_dir !== b.is_dir) return a.is_dir ? -1 : 1
-    let diff = 0
-    if (key === "name") return collator.value.compare(a.name, b.name) * dir
-    if (key === "type") diff = collator.value.compare(entryExtension(a), entryExtension(b))
-    else if (key === "size") diff = a.size - b.size
-    else diff = Date.parse(a.modified) - Date.parse(b.modified)
-    return diff && !Number.isNaN(diff) ? Math.sign(diff) * dir : collator.value.compare(a.name, b.name)
-  })
-})
+const sorted = computed(() => sortEntries(props.list.content ?? [], prefs.arrange))
 
 const chunk = computed(() => {
   const size = Number(session.settings?.default_page_size)
@@ -44,6 +31,7 @@ const chunk = computed(() => {
 const canUpload = computed(() => capsFor(props.list.write).upload)
 
 const { filtered, filtering } = useFolderFilter(() => props.path, sorted)
+const groups = computed(() => groupEntries(filtered.value, prefs.arrange))
 
 watch(() => props.path, clearSelection)
 onBeforeUnmount(clearSelection)
@@ -92,7 +80,7 @@ function onDrop(event: DragEvent) {
       <EntryList
         v-if="filtered.length"
         :path="path"
-        :entries="filtered"
+        :groups="groups"
         :chunk="chunk"
         selectable
         :writable="list.write"

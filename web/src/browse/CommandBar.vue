@@ -3,7 +3,7 @@ import { computed, ref } from "vue"
 import { useI18n } from "vue-i18n"
 import { FluentButton, FluentSvgIcon, type FluentMenuItem } from "@platform-kit/fluent/vue"
 import MenuButton from "@/components/MenuButton.vue"
-import { prefs, type SortKey, type SortOrder, type ViewMode } from "@/stores/prefs"
+import { prefs, setGroupKey, type GroupKey, type SortKey, type SortOrder, type ViewMode } from "@/stores/prefs"
 import { browseIcons, icons } from "@/utils/icons"
 import type { Command, Commands } from "./commands"
 import { useWidth } from "./useWidth"
@@ -14,7 +14,7 @@ const { t } = useI18n()
 const bar = ref<HTMLElement | null>(null)
 const width = useWidth(bar)
 // Labels give way to icons first, then everything but New collapses into the More menu
-const mode = computed<"full" | "icons" | "compact">(() => (width.value >= 780 ? "full" : width.value >= 500 ? "icons" : "compact"))
+const mode = computed<"full" | "icons" | "compact">(() => (width.value >= 1060 ? "full" : width.value >= 580 ? "icons" : "compact"))
 
 const groups = computed(() => {
   const c = props.commands
@@ -53,8 +53,20 @@ const sortItems = computed<FluentMenuItem[]>(() => [
   { value: "desc", label: t("explorer.command.descending") },
 ])
 function selectSort(value: string) {
-  if (sortKeys.includes(value as SortKey)) prefs.sortKey = value as SortKey
-  else prefs.sortOrder = value as SortOrder
+  if (sortKeys.includes(value as SortKey)) prefs.arrange.sortKey = value as SortKey
+  else prefs.arrange.sortOrder = value as SortOrder
+}
+
+const groupItems = computed<FluentMenuItem[]>(() => [
+  { value: "none", label: t("explorer.command.groupNone") },
+  ...sortKeys.map((key) => ({ value: key, label: t(`explorer.columns.${key}`) })),
+  { separator: true },
+  { value: "asc", label: t("explorer.command.ascending") },
+  { value: "desc", label: t("explorer.command.descending") },
+])
+function selectGroup(value: string) {
+  if (value === "asc" || value === "desc") prefs.arrange.groupOrder = value
+  else setGroupKey(value as GroupKey)
 }
 
 const layoutItems = computed(() => [
@@ -102,8 +114,16 @@ const layoutIcon = computed(() => (prefs.view === "grid" ? icons.gridView : brow
         :label="t('explorer.command.sort')"
         :text="mode === 'full' ? t('explorer.command.sort') : undefined"
         :items="sortItems"
-        :model-value="[prefs.sortKey, prefs.sortOrder]"
+        :model-value="[prefs.arrange.sortKey, prefs.arrange.sortOrder]"
         @select="selectSort"
+      />
+      <MenuButton
+        :icon="browseIcons.groupList"
+        :label="t('explorer.command.group')"
+        :text="mode === 'full' ? t('explorer.command.group') : undefined"
+        :items="groupItems"
+        :model-value="[prefs.arrange.groupKey, prefs.arrange.groupOrder]"
+        @select="selectGroup"
       />
       <MenuButton
         :icon="layoutIcon"

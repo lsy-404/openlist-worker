@@ -1,6 +1,8 @@
 import { computed, reactive, shallowRef, watch } from "vue"
 import { useRouter } from "vue-router"
 import type { FsEntry } from "@/api"
+import { groupEntries, sortEntries } from "@/browse/arrange"
+import { prefs } from "@/stores/prefs"
 import { listFolder } from "./folder"
 import { encodePath, joinPath, parentPath, splitPath } from "@/utils/path"
 
@@ -13,7 +15,8 @@ export function useSiblings(
   accept: (entry: FsEntry) => boolean,
 ) {
   const router = useRouter()
-  const entries = shallowRef<FsEntry[]>([])
+  const listed = shallowRef<FsEntry[]>([])
+  const entries = computed(() => groupEntries(sortEntries(listed.value, prefs.arrange), prefs.arrange).flatMap((g) => g.entries))
   const dir = computed(() => parentPath(source().path))
   const name = computed(() => splitPath(source().path).pop() ?? "")
 
@@ -23,9 +26,9 @@ export function useSiblings(
       const target = dir.value
       try {
         const files = (await listFolder(target)).files
-        if (target === dir.value) entries.value = files
+        if (target === dir.value) listed.value = files
       } catch {
-        entries.value = source().related?.filter((e) => !e.is_dir) ?? []
+        listed.value = source().related?.filter((e) => !e.is_dir) ?? []
       }
     },
     { immediate: true },

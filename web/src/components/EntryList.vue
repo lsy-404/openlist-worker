@@ -6,26 +6,48 @@ import { FluentButton, FluentCheckbox, FluentMenu, FluentSvgIcon } from "@platfo
 import { actionLabel, actionsFor, type ActionContext } from "@/actions"
 import { createActionContext } from "@/actions/context"
 import type { FsEntry } from "@/api"
+import type { Group } from "@/browse/arrange"
 import { isCut } from "@/browse/clipboard"
 import { entryTypeLabel } from "@/browse/entryType"
 import { prefs, toggleSort, type SortKey } from "@/stores/prefs"
 import { clearSelection, selectAll, selection, toggleSelection } from "@/stores/selection"
 import { formatDate, formatSize } from "@/utils/format"
-import { iconForEntry, icons } from "@/utils/icons"
+import { browseIcons, iconForEntry, icons } from "@/utils/icons"
 import { entryDownloadUrl } from "@/utils/links"
 import { encodePath, joinPath } from "@/utils/path"
 
-const props = defineProps<{ path: string; entries: FsEntry[]; chunk: number; selectable?: boolean; writable?: boolean }>()
+const props = defineProps<{ path: string; groups: Group[]; chunk: number; selectable?: boolean; writable?: boolean }>()
 const emit = defineEmits<{ refresh: [] }>()
 const router = useRouter()
 
+const grouped = computed(() => prefs.arrange.groupKey !== "none")
+const collapsed = ref(new Set<string>())
+watch(() => [props.path, prefs.arrange.groupKey], () => (collapsed.value = new Set()))
+
+function toggleGroup(id: string) {
+  const next = new Set(collapsed.value)
+  if (!next.delete(id)) next.add(id)
+  collapsed.value = next
+}
+
+const open = computed(() => props.groups.filter((g) => !collapsed.value.has(g.id)))
+const names = computed(() => open.value.flatMap((g) => g.entries.map((e) => e.name)))
+
 const visible = ref(props.chunk)
 watch(
-  () => [props.entries, props.chunk],
+  () => [props.groups, props.chunk],
   () => (visible.value = props.chunk),
 )
-const shown = computed(() => props.entries.slice(0, visible.value))
-const remaining = computed(() => props.entries.length - shown.value.length)
+// Chunking counts only entries that are on screen, so collapsed groups keep their header and cost nothing
+const shown = computed(() => {
+  let left = visible.value
+  return props.groups.map((group) => {
+    const entries = collapsed.value.has(group.id) ? [] : group.entries.slice(0, Math.max(left, 0))
+    left -= entries.length
+    return { ...group, shown: entries }
+  })
+})
+const remaining = computed(() => names.value.length - shown.value.reduce((n, g) => n + g.shown.length, 0))
 
 function showMore() {
   visible.value += props.chunk
@@ -46,7 +68,6 @@ onMounted(() => {
 })
 onBeforeUnmount(() => observer?.disconnect())
 
-const names = computed(() => props.entries.map((e) => e.name))
 const selecting = computed(() => selection.names.size > 0)
 let shift = false as boolean
 
@@ -107,7 +128,7 @@ const columns: SortKey[] = ["name", "modified", "type", "size"]
 const allPicked = computed(() => names.value.length > 0 && names.value.every((n) => selection.names.has(n)))
 const somePicked = computed(() => !allPicked.value && names.value.some((n) => selection.names.has(n)))
 function ariaSort(key: SortKey) {
-  return prefs.sortKey === key ? (prefs.sortOrder === "asc" ? "ascending" : "descending") : "none"
+  return prefs.arrange.sortKey === key ? (prefs.arrange.sortOrder === "asc" ? "ascending" : "descending") : "none"
 }
 </script>
 
@@ -132,17 +153,31 @@ function ariaSort(key: SortKey) {
       >
         {{ t(`explorer.columns.${key}`) }}
         <FluentSvgIcon
-          v-if="prefs.sortKey === key"
-          :svg="prefs.sortOrder === 'asc' ? icons.arrowUp : icons.arrowDown"
+          v-if="prefs.arrange.sortKey === key"
+          :svg="prefs.arrange.sortOrder === 'asc' ? icons.arrowUp : icons.arrowDown"
           :size="12"
         />
       </button>
       <span class="head__cell head__cell--more" />
     </div>
 
-    <ul class="items">
+    <section v-for="group in shown" :key="group.id" class="group">
+      <h3 v-if="grouped" class="group__head">
+        <button
+          class="group__toggle"
+          :aria-expanded="!collapsed.has(group.id)"
+          :aria-label="t(collapsed.has(group.id) ? 'explorer.group.expand' : 'explorer.group.collapse', { name: group.label })"
+          @click="toggleGroup(group.id)"
+        >
+          <FluentSvgIcon class="group__chevron" :svg="browseIcons.chevronDown" :size="12" />
+          <span class="group__label">{{ group.label }}</span>
+          <span class="group__count">{{ group.entries.length }}</span>
+        </button>
+        <span class="group__line" aria-hidden="true" />
+      </h3>
+      <ul v-if="!collapsed.has(group.id)" class="items">
       <li
-        v-for="entry in shown"
+        v-for="entry in group.shown"
         :key="entry.name"
         class="entry"
         :class="{ 'entry--selected': selection.names.has(entry.name), 'entry--cut': isCut(path, entry.name) }"
@@ -182,7 +217,8 @@ function ariaSort(key: SortKey) {
           <FluentSvgIcon :svg="icons.moreHorizontal" :size="18" />
         </FluentButton>
       </li>
-    </ul>
+      </ul>
+    </section>
 
     <div v-if="remaining > 0" ref="sentinel" class="more">
       <FluentButton @click="showMore">{{ t("browse.entryList.showMore", { count: remaining }) }}</FluentButton>
@@ -239,6 +275,64 @@ function ariaSort(key: SortKey) {
 .head__cell--more {
   cursor: default;
   pointer-events: none;
+}
+.group__head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  padding: 0 4px;
+  font-size: inherit;
+}
+[data-view="list"] .group__head {
+  padding-inline-start: 12px;
+  background: var(--fluent-surface);
+  position: sticky;
+  top: 37px;
+  z-index: 1;
+}
+.group__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--fluent-radius);
+  background: none;
+  color: var(--fluent-muted);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: var(--motion-fill);
+}
+.group__toggle:hover {
+  background: var(--fluent-control-hover);
+}
+.group__toggle:focus-visible {
+  outline: 2px solid var(--fluent-focus-outer);
+  outline-offset: -2px;
+}
+.group__label {
+  font-weight: 600;
+}
+.group__count {
+  opacity: 0.75;
+}
+.group__chevron {
+  transition: transform var(--fluent-fast) var(--fluent-ease);
+}
+.group__toggle[aria-expanded="false"] .group__chevron {
+  transform: rotate(-90deg);
+}
+.group__line {
+  flex: 1;
+  height: 1px;
+  background: var(--fluent-border);
+}
+[data-view="list"].entries--selectable .group__head {
+  padding-inline-start: 44px;
 }
 .items {
   list-style: none;
