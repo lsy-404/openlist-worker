@@ -1509,7 +1509,9 @@ async function listItemsResolved(
         const st = (db.storages || []).find(
           (s: any) => s.id === resolved.storage?.id,
         )
-        if (st) {
+        // 子目录的列目录失败不代表整个挂载不可用
+        const atRoot = !String(resolved.physical || "").replace(/^\/+|\/+$/g, "")
+        if (st && atRoot) {
           st.status = e.message || String(e)
           await saveDb(db, requestContext?.env)
         }
