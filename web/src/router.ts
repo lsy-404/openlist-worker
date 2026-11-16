@@ -10,6 +10,8 @@ export const router = createRouter({
   routes: [
     { path: "/@login", component: LoginView },
     { path: "/@tasks", component: () => import("@/tasks/TasksView.vue") },
+    { path: "/@shares", component: () => import("@/shares/SharesView.vue"), meta: { title: "shares.title" } },
+    { path: "/@s/:pathMatch(.*)*", component: BrowseView, meta: { share: true } },
     adminRoute,
     { path: "/:pathMatch(.*)*", components: { default: BrowseView, sidebar: BrowseSidebar } },
   ],

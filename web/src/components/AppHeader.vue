@@ -11,6 +11,7 @@ import SearchBox from "@/search/SearchBox.vue"
 import { isGuest, rememberReturnPath, session, siteTitle } from "@/stores/session"
 import { getToken } from "@/api"
 import { icons } from "@/utils/icons"
+import { isSharePath } from "@/utils/path"
 
 defineProps<{ navToggle?: boolean; navOpen?: boolean }>()
 defineEmits<{ "toggle-nav": [] }>()
@@ -47,7 +48,7 @@ function login() {
       <span class="brand__title">{{ siteTitle }}</span>
     </RouterLink>
 
-    <div class="header__search" data-slot="header-search"><slot name="search"><SearchBox /></slot></div>
+    <div class="header__search" data-slot="header-search"><slot name="search"><SearchBox v-if="!isSharePath(route.path)" /></slot></div>
 
     <div class="header__tools">
       <MenuButton

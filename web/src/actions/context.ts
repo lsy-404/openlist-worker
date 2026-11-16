@@ -1,7 +1,7 @@
 import type { FsEntry } from "@/api"
 import { notify } from "@/stores/toast"
-import { parentPath } from "@/utils/path"
-import { capsFor } from "./permissions"
+import { isSharePath, parentPath } from "@/utils/path"
+import { capsFor, NO_CAPS } from "./permissions"
 import type { ActionContext } from "./registry"
 
 interface ContextInit extends Pick<ActionContext, "surface" | "kind" | "path" | "entry" | "downloadUrl"> {
@@ -15,7 +15,7 @@ export function createActionContext(
   handlers: Pick<ActionContext, "refresh" | "navigate">,
 ): ActionContext {
   const dir = init.kind === "file" || init.surface === "context" ? parentPath(init.path) : init.path
-  return { ...init, dir, selection, caps: capsFor(writable), ...handlers, notify }
+  return { ...init, dir, selection, caps: isSharePath(init.path) ? NO_CAPS : capsFor(writable), ...handlers, notify }
 }
 
 /** Stand-in entry for the folder a view is showing (the API has no metadata for it in a listing). */

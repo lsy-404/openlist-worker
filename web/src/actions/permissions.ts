@@ -6,6 +6,8 @@ const RENAME = 4
 const MOVE = 5
 const COPY = 6
 const DELETE = 7
+const SHARE = 14
+const CUSTOMIZE_SHARE_ID = 15
 const ROLE_GUEST = 1
 const ROLE_ADMIN = 2
 
@@ -28,6 +30,9 @@ function holds(bit: number): boolean {
   if (roles.includes(ROLE_GUEST)) return false
   return ((user.permission >> bit) & 1) === 1
 }
+
+export const canShare = (): boolean => holds(SHARE)
+export const canCustomizeShareId = (): boolean => holds(CUSTOMIZE_SHARE_ID)
 
 /**
  * Operations the current user may perform in a folder. `writable` is the `write` flag of the folder

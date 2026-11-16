@@ -70,6 +70,10 @@ function onKey(event: KeyboardEvent) {
             <FluentSvgIcon :svg="icons.settings" :size="16" />
             <span class="fluent-menu__item-label">{{ t("shell.header.admin") }}</span>
           </button>
+          <button class="fluent-menu__item" type="button" role="menuitem" @click="run(() => router.push('/@shares'))">
+            <FluentSvgIcon :svg="icons.share" :size="16" />
+            <span class="fluent-menu__item-label">{{ t("shares.title") }}</span>
+          </button>
           <button class="fluent-menu__item" type="button" role="menuitem" @click="run(() => void logout())">
             <FluentSvgIcon :svg="icons.signOut" :size="16" />
             <span class="fluent-menu__item-label">{{ t("shell.header.logout") }}</span>

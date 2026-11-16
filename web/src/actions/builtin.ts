@@ -4,7 +4,7 @@ import { absoluteUrl } from "@/utils/path"
 import { pageUrl } from "@/utils/links"
 import { registerAction } from "./registry"
 
-async function copyText(text: string): Promise<boolean> {
+export async function copyText(text: string): Promise<boolean> {
   try {
     await navigator.clipboard.writeText(text)
     return true

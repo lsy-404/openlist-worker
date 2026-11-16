@@ -100,11 +100,11 @@ export async function resolveShare(
   const withinShare = (p: string) =>
     allowedRoots.some((a) => p === a || p.startsWith(a === "/" ? "/" : a + "/"))
 
-  // Single-file share: one file has no sub-paths, so trailing segments are
-  // always suspicious — reject instead of concatenating them.
+  // Single entry: sub-paths are inside the shared folder (a file simply has none that exist)
   if (share.files.length === 1) {
-    if (rest.length > 0) return { ok: false, error: "path not found in share" }
-    return { ok: true, share, realPath: normalize(share.files[0]) }
+    const real = normalize([normalize(share.files[0]), ...rest].join("/"))
+    if (!withinShare(real)) return { ok: false, error: "path not found in share" }
+    return { ok: true, share, realPath: real }
   }
 
   // Multi-file share, sub-path: match by basename

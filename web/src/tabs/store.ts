@@ -11,8 +11,8 @@ export interface Tab {
 const STORAGE_KEY = "ui.tabs"
 const MAX_HISTORY = 50
 // Console pages that live in a single tab each
-const SINGLETONS = ["/@manage", "/@tasks"]
-const NON_PAGE_PREFIXES = ["/api", "/d", "/p", "/dav", "/s3", "/assets"]
+const SINGLETONS = ["/@manage", "/@tasks", "/@shares"]
+const NON_PAGE_PREFIXES = ["/api", "/d", "/sd", "/p", "/dav", "/s3", "/assets"]
 
 interface State {
   tabs: Tab[]

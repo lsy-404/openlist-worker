@@ -1,10 +1,12 @@
 <script setup lang="ts">
+import { computed } from "vue"
 import { useI18n } from "vue-i18n"
 import { FluentButton, FluentSvgIcon } from "@platform-kit/fluent/vue"
 import Breadcrumb from "@/components/Breadcrumb.vue"
 import FolderFilter from "@/search/FolderFilter.vue"
 import { canGoBack, canGoForward, goBack, goForward } from "@/tabs/store"
 import { browseIcons, icons } from "@/utils/icons"
+import { shareRoot } from "@/utils/path"
 import CommandBar from "./CommandBar.vue"
 import type { Commands } from "./commands"
 
@@ -12,6 +14,7 @@ const props = defineProps<{ path: string; commands: Commands | null; filterable:
 const emit = defineEmits<{ up: []; refresh: [] }>()
 
 const { t } = useI18n()
+const atRoot = computed(() => props.path === (shareRoot(props.path) ?? "/"))
 </script>
 
 <template>
@@ -24,7 +27,7 @@ const { t } = useI18n()
         <FluentButton tone="subtle" icon-only :disabled="!canGoForward" :aria-label="t('explorer.nav.forward')" :title="t('explorer.nav.forward')" @click="goForward">
           <FluentSvgIcon :svg="browseIcons.arrowRight" :size="20" />
         </FluentButton>
-        <FluentButton tone="subtle" icon-only :disabled="path === '/'" :aria-label="t('explorer.nav.up')" :title="t('explorer.nav.up')" @click="emit('up')">
+        <FluentButton tone="subtle" icon-only :disabled="atRoot" :aria-label="t('explorer.nav.up')" :title="t('explorer.nav.up')" @click="emit('up')">
           <FluentSvgIcon :svg="icons.arrowUp" :size="20" />
         </FluentButton>
         <FluentButton tone="subtle" icon-only :busy="loading" :aria-label="t('explorer.nav.refresh')" :title="t('explorer.nav.refresh')" @click="emit('refresh')">

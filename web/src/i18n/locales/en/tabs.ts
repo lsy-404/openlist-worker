@@ -4,6 +4,7 @@ const messages: typeof zh = {
   label: "Tabs",
   home: "Home",
   tasks: "Tasks",
+  shares: "Shares",
   new: "New tab",
   close: "Close tab {name}",
   closeShort: "Close",

@@ -25,7 +25,7 @@ const groups = computed(() => {
 
 const overflow = computed<Command[][]>(() => {
   const c = props.commands
-  const extra = [c.moveTo, c.copyTo, c.copyLink].filter((cmd): cmd is Command => !!cmd)
+  const extra = [c.share, c.moveTo, c.copyTo, c.copyLink].filter((cmd): cmd is Command => !!cmd)
   return [...(mode.value === "compact" ? groups.value : []), extra, [c.selectAll, c.selectNone]].filter((group) => group.length)
 })
 
