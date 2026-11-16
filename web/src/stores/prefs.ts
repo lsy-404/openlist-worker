@@ -5,18 +5,25 @@ export type ThemeMode = "light" | "dark" | "system"
 export type ViewMode = "list" | "grid"
 export type SortKey = "name" | "size" | "modified" | "type"
 export type SortOrder = "asc" | "desc"
+export type GroupKey = "none" | "name" | "modified" | "type" | "size"
+
+export interface Arrange {
+  sortKey: SortKey
+  sortOrder: SortOrder
+  groupKey: GroupKey
+  groupOrder: SortOrder
+}
 
 interface Prefs {
   theme: ThemeMode
   locale: Locale
   view: ViewMode
-  sortKey: SortKey
-  sortOrder: SortOrder
+  arrange: Arrange
   sidebar: { collapsed: string[] }
 }
 
 const STORAGE_KEY = "ui.prefs"
-const defaults: Prefs = { theme: "system", locale: detectLocale(navigator.language), view: "list", sortKey: "name", sortOrder: "asc", sidebar: { collapsed: [] } }
+const defaults: Prefs = { theme: "system", locale: detectLocale(navigator.language), view: "list", arrange: { sortKey: "modified", sortOrder: "desc", groupKey: "none", groupOrder: "asc" }, sidebar: { collapsed: [] } }
 
 function load(): Prefs {
   try {
@@ -66,10 +73,16 @@ export function toggleTheme(): void {
 }
 
 export function toggleSort(key: SortKey): void {
-  if (prefs.sortKey === key) {
-    prefs.sortOrder = prefs.sortOrder === "asc" ? "desc" : "asc"
+  const arrange = prefs.arrange
+  if (arrange.sortKey === key) {
+    arrange.sortOrder = arrange.sortOrder === "asc" ? "desc" : "asc"
   } else {
-    prefs.sortKey = key
-    prefs.sortOrder = "asc"
+    arrange.sortKey = key
+    arrange.sortOrder = key === "modified" || key === "size" ? "desc" : "asc"
   }
+}
+
+export function setGroupKey(key: GroupKey): void {
+  prefs.arrange.groupKey = key
+  prefs.arrange.groupOrder = key === "modified" ? "desc" : "asc"
 }

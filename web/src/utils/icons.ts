@@ -140,9 +140,10 @@ import arrowRight from "@fluentui/svg-icons/icons/arrow_right_24_regular.svg?raw
 import chevronDown from "@fluentui/svg-icons/icons/chevron_down_24_regular.svg?raw"
 import clipboardPaste from "@fluentui/svg-icons/icons/clipboard_paste_24_regular.svg?raw"
 import cut from "@fluentui/svg-icons/icons/cut_24_regular.svg?raw"
+import groupList from "@fluentui/svg-icons/icons/group_list_24_regular.svg?raw"
 import hardDrive from "@fluentui/svg-icons/icons/hard_drive_24_regular.svg?raw"
 
-export const browseIcons = { appsListDetail, arrowRight, chevronDown, clipboardPaste, cut, hardDrive }
+export const browseIcons = { appsListDetail, arrowRight, chevronDown, clipboardPaste, cut, groupList, hardDrive }
 
 import people from "@fluentui/svg-icons/icons/people_24_regular.svg?raw"
 
