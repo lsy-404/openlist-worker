@@ -44,6 +44,9 @@ type SavePicker = (options: { suggestedName: string; types: { description: strin
 }>
 
 const LIST_CONCURRENCY = 3
+const FETCH_CONCURRENCY = 4
+// Bytes of files fetched ahead of the one being written
+const AHEAD_LIMIT = 64 * 1024 ** 2
 // Without the File System Access API the whole archive is held in memory
 const BLOB_LIMIT = 1024 ** 3
 
@@ -84,31 +87,83 @@ async function collect(dir: string, entries: FsEntry[], signal: AbortSignal): Pr
 
 async function* sources(item: PackageItem, { files, dirs }: Collected, signal: AbortSignal) {
   for (const dir of dirs) yield { name: `${dir}/` }
-  for (const file of files) {
+  const read = readAhead(item, files, signal)
+  for (let i = 0; i < files.length; i++) {
     signal.throwIfAborted()
-    item.current = file.rel
-    // A body that breaks mid-transfer must name its file as well
-    const failure = (err: unknown) => (signal.aborted ? err : new Error(t("files.package.fetchFailed", { path: file.rel, reason: fetchErrorMessage(err) })))
-    const res = await fetchFile(file.url, signal).catch((err) => {
-      throw failure(err)
-    })
-    if (!res.body) throw failure(new Error("empty response"))
-    yield { name: file.rel, lastModified: file.modified, input: counted(res.body.getReader(), item, failure) }
+    item.current = files[i].rel
+    yield { name: files[i].rel, lastModified: files[i].modified, input: read(i) }
   }
 }
 
-async function* counted(reader: ReadableStreamDefaultReader<Uint8Array>, item: PackageItem, failure: (err: unknown) => unknown) {
-  try {
-    for (;;) {
-      const { done, value } = await reader.read()
-      if (done) return
-      item.loaded += value.byteLength
-      yield value
+interface Ahead {
+  chunks: Uint8Array[]
+  done: boolean
+  error: unknown
+}
+
+/**
+ * Fetches the next few files at once while the zip takes them in order; bodies of files whose turn
+ * has not come are buffered up to AHEAD_LIMIT.
+ */
+function readAhead(item: PackageItem, files: ZipFile[], signal: AbortSignal): (index: number) => AsyncGenerator<Uint8Array> {
+  const slots = new Map<number, Ahead>()
+  let head = 0
+  let buffered = 0
+  let waiters: (() => void)[] = []
+  const changed = () => {
+    const list = waiters
+    waiters = []
+    for (const wake of list) wake()
+  }
+  const wait = () => new Promise<void>((resolve) => waiters.push(resolve))
+  signal.addEventListener("abort", changed, { once: true })
+
+  const load = async (index: number, slot: Ahead) => {
+    try {
+      const res = await fetchFile(files[index].url, signal)
+      if (!res.body) throw new Error("empty response")
+      const reader = res.body.getReader()
+      for (;;) {
+        // The file being written still reads with a full buffer, or the later files filling it would stall the zip
+        while (buffered >= AHEAD_LIMIT && !(index === head && !slot.chunks.length)) {
+          await wait()
+          signal.throwIfAborted()
+        }
+        const { done, value } = await reader.read()
+        if (done) break
+        slot.chunks.push(value)
+        buffered += value.byteLength
+        item.loaded += value.byteLength
+        changed()
+      }
+    } catch (err) {
+      slot.error = signal.aborted ? err : new Error(t("files.package.fetchFailed", { path: files[index].rel, reason: fetchErrorMessage(err) }))
     }
-  } catch (err) {
-    throw failure(err)
-  } finally {
-    void reader.cancel().catch(() => undefined)
+    slot.done = true
+    changed()
+  }
+
+  return async function* (index) {
+    head = index
+    for (let i = index; i < Math.min(files.length, index + FETCH_CONCURRENCY); i++) {
+      if (slots.has(i)) continue
+      const slot: Ahead = { chunks: [], done: false, error: null }
+      slots.set(i, slot)
+      void load(i, slot)
+    }
+    changed()
+    const slot = slots.get(index)!
+    for (;;) {
+      const chunk = slot.chunks.shift()
+      if (chunk) {
+        buffered -= chunk.byteLength
+        changed()
+        yield chunk
+      } else if (slot.error) throw slot.error
+      else if (slot.done) break
+      else await wait()
+    }
+    slots.delete(index)
   }
 }
 

@@ -213,6 +213,16 @@ export const runningCount = computed(
     packages.items.filter((p) => p.status === "running").length,
 )
 
+// Closing or reloading the page would drop every transfer and operation still in flight
+function holdPage(event: BeforeUnloadEvent): void {
+  event.preventDefault()
+  event.returnValue = ""
+}
+watch(
+  () => runningCount.value > 0,
+  (busy) => (busy ? window.addEventListener("beforeunload", holdPage) : window.removeEventListener("beforeunload", holdPage)),
+)
+
 export function dismissTask(id: string): void {
   const opIndex = ops.findIndex((o) => o.id === id)
   if (opIndex >= 0 && ops[opIndex].state !== "running") ops.splice(opIndex, 1)
