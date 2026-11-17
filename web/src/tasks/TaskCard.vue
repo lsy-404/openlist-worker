@@ -57,6 +57,7 @@ const summary = computed(() => {
   if (pending.value) {
     const parts: string[] = []
     if (total > 1) parts.push(t("tasks.card.itemsDone", { done: card.done, total }))
+    if (card.storing) return [...parts, t("tasks.card.storing")].join(" · ")
     if (card.size > 0) parts.push(`${formatSize(card.loaded)} / ${formatSize(card.size)}`)
     if (speed.value) parts.push(speed.value)
     if (remaining.value) parts.push(t("tasks.card.left", { duration: remaining.value }))
@@ -88,6 +89,7 @@ const spark = computed(() => {
 })
 
 function itemState(task: Task): string {
+  if (task.storing !== undefined) return task.storing === null ? t("tasks.card.storing") : t("tasks.card.storingPercent", { percent: Math.floor(task.storing) })
   if (task.state === "running" && task.size > 0) return `${Math.round((task.loaded / task.size) * 100)}%`
   if (task.state === "failed" && task.error) return task.error
   return t(`tasks.state.${task.state}`)

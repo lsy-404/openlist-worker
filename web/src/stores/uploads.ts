@@ -27,6 +27,8 @@ export interface UploadItem {
   prep: Preparation | null
   /** "finishing" once all bytes are on the server and the storage is still writing the file. */
   phase: "sending" | "finishing"
+  /** Storage write progress (0 to 100) while finishing, null until the storage reports it. */
+  stored: number | null
   /** Epoch milliseconds when the upload was queued or last retried. */
   startedAt: number
   /** Epoch milliseconds when it reached a final state, 0 while pending. */
@@ -127,6 +129,7 @@ async function run(item: UploadItem): Promise<void> {
   item.error = ""
   item.loaded = 0
   item.phase = "sending"
+  item.stored = null
   try {
     const prepared = prep ? await prep.ready : null
     if (!prep) await prepareDirs(item)
@@ -135,6 +138,7 @@ async function run(item: UploadItem): Promise<void> {
       prepared: prepared ?? undefined,
       onProgress: (loaded) => (item.loaded = Math.min(loaded, item.size)),
       onPhase: (phase) => (item.phase = phase),
+      onStored: (percent) => (item.stored = percent),
     })
     item.loaded = item.size
     item.status = "done"
@@ -260,6 +264,7 @@ export async function enqueueUploads(dir: string, selection: UploadSelection): P
     controller: null,
     prep: null,
     phase: "sending",
+    stored: null,
     startedAt: Date.now(),
     endedAt: 0,
   }))

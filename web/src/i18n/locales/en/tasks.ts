@@ -22,6 +22,8 @@ const messages: typeof zh = {
     root: "root folder",
     thisDevice: "This device",
     working: "Working…",
+    storing: "Sent to the server, writing to the storage",
+    storingPercent: "Writing to storage {percent}%",
     itemsDone: "{done} of {total} items",
     left: "{duration} left",
     failedCount: "{failed} of {total} items failed",

@@ -28,6 +28,8 @@ export interface Task {
   interrupted: boolean
   /** Uploads queued together share a batch. */
   batch?: number
+  /** Set once every byte is on the server and the storage is still writing: its progress (0 to 100), or null when unknown. */
+  storing?: number | null
   cancel?: () => void
   retry?: () => void
 }
@@ -168,6 +170,7 @@ function fromUpload(item: UploadItem): Task {
     error: item.error,
     interrupted: false,
     batch: item.batch,
+    storing: item.status === "uploading" && item.phase === "finishing" ? item.stored : undefined,
     cancel: state === "queued" || state === "running" ? () => cancelUpload(item) : undefined,
     retry: state === "failed" || state === "cancelled" ? () => retryUpload(item) : undefined,
   }

@@ -26,6 +26,8 @@ export interface TaskCard {
   error: string
   /** Fraction between 0 and 1, or -1 when the progress is unknown. */
   fraction: number
+  /** True when nothing is left to send and the storage is still writing; `fraction` is then the storage's progress. */
+  storing: boolean
   cancel?: () => void
   retry?: () => void
 }
@@ -56,7 +58,11 @@ function buildCard(list: Task[]): TaskCard {
   const upload = first.kind === "upload"
   const source = upload ? t("tasks.card.thisDevice") : first.source
   const target = upload ? first.folder : first.target
-  const fraction = size > 0 ? Math.min(1, loaded / size) : upload ? done / list.length : state === "succeeded" ? 1 : -1
+  const writing = list.filter((task) => task.storing !== undefined)
+  const storing = writing.length > 0 && !list.some((task) => isPending(task.state) && task.storing === undefined)
+  const fraction = storing
+    ? writing.some((task) => task.storing === null) ? -1 : writing.reduce((sum, task) => sum + (task.storing ?? 0), 0) / writing.length / 100
+    : size > 0 ? Math.min(1, loaded / size) : upload ? done / list.length : state === "succeeded" ? 1 : -1
   return {
     id: first.batch !== undefined && upload ? `batch${first.batch}` : first.id,
     kind: first.kind,
@@ -75,6 +81,7 @@ function buildCard(list: Task[]): TaskCard {
     endedAt: list.some((task) => isPending(task.state)) ? 0 : Math.max(...list.map((task) => task.endedAt)),
     error: failedTasks[0]?.error ?? "",
     fraction,
+    storing,
     cancel: cancels.length ? () => cancels.forEach((task) => task.cancel?.()) : undefined,
     retry: retries.length ? () => retries.forEach((task) => task.retry?.()) : undefined,
   }

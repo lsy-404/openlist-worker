@@ -21,6 +21,8 @@ export interface MultipartSession {
   received: [number, number][]
   state?: string
   error?: string
+  /** How far the storage is with writing the file, 0 to 100. */
+  storage_progress?: number
 }
 
 /** Result of the init step; session is null for small files and for storages without chunked upload. */
@@ -36,6 +38,8 @@ export interface UploadOptions {
   prepared?: Prepared
   /** Called with "finishing" once every byte has reached the server and the storage is still writing. */
   onPhase?(phase: "sending" | "finishing"): void
+  /** Storage write progress (0 to 100) while finishing, for storages that report it. */
+  onStored?(percent: number): void
 }
 
 const aborted = () => new DOMException("Aborted", "AbortError")
@@ -215,6 +219,7 @@ async function finish(session: MultipartSession, opts: UploadOptions): Promise<v
     if (settled) throw settled
     try {
       const snap = await status()
+      if (typeof snap?.storage_progress === "number") opts.onStored?.(snap.storage_progress)
       if (snap?.state === "completed") return
       if (snap?.state?.startsWith("failed") || snap?.state === "aborted") {
         throw apiError(500, snap.error || t("errors.uploadFailed"))

@@ -20,6 +20,8 @@ export default {
     root: "根目录",
     thisDevice: "本机",
     working: "处理中…",
+    storing: "已传到服务器，正在写入存储",
+    storingPercent: "写入存储 {percent}%",
     itemsDone: "{done} / {total} 项",
     left: "剩余 {duration}",
     failedCount: "{total} 项中有 {failed} 项失败",
