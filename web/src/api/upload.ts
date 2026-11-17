@@ -6,11 +6,15 @@ import type { ApiEnvelope } from "./types"
 const CHUNK_SIZE = 8 * 1024 * 1024
 /** Chunks in flight at once; the node reassembles within a window of 8 chunks. */
 const INFLIGHT = 3
+/** Data-carrying requests in flight across all uploads, so the browser's per-host connections are not exhausted. */
+const TRANSFER_SLOTS = 6
+/** A prepared session older than this is re-initialised; an idle session may have been evicted server-side. */
+const PREPARED_MAX_AGE = 2 * 60 * 1000
 const MAX_ATTEMPTS = 6
 /** Flow control (429/409) is not a failure, so it gets a much larger budget than errors. */
 const MAX_FLOW_RETRIES = 400
 
-interface MultipartSession {
+export interface MultipartSession {
   upload_id: string
   chunk_size: number
   total_chunks: number
@@ -19,14 +23,60 @@ interface MultipartSession {
   error?: string
 }
 
+/** Result of the init step; session is null for small files and for storages without chunked upload. */
+export interface Prepared {
+  session: MultipartSession | null
+  at: number
+}
+
 export interface UploadOptions {
   signal: AbortSignal
   onProgress(loaded: number): void
+  /** Result of an earlier prepareUpload for the same path and file. */
+  prepared?: Prepared
   /** Called with "finishing" once every byte has reached the server and the storage is still writing. */
   onPhase?(phase: "sending" | "finishing"): void
 }
 
 const aborted = () => new DOMException("Aborted", "AbortError")
+
+let freeSlots = TRANSFER_SLOTS
+const slotWaiters: (() => void)[] = []
+
+function releaseSlot(): void {
+  const next = slotWaiters.shift()
+  if (next) next()
+  else freeSlots++
+}
+
+function acquireSlot(signal: AbortSignal): Promise<void> {
+  if (signal.aborted) return Promise.reject(aborted())
+  if (freeSlots > 0) {
+    freeSlots--
+    return Promise.resolve()
+  }
+  return new Promise((resolve, reject) => {
+    const grant = () => {
+      signal.removeEventListener("abort", onAbort)
+      resolve()
+    }
+    const onAbort = () => {
+      slotWaiters.splice(slotWaiters.indexOf(grant), 1)
+      reject(aborted())
+    }
+    slotWaiters.push(grant)
+    signal.addEventListener("abort", onAbort, { once: true })
+  })
+}
+
+async function withSlot<T>(signal: AbortSignal, task: () => Promise<T>): Promise<T> {
+  await acquireSlot(signal)
+  try {
+    return await task()
+  } finally {
+    releaseSlot()
+  }
+}
 
 function send<T>(
   method: "GET" | "PUT" | "POST",
@@ -73,12 +123,14 @@ function send<T>(
 }
 
 function putWhole(path: string, file: File, opts: UploadOptions): Promise<null> {
-  return send<null>(
-    "PUT",
-    "/api/fs/put",
-    { "File-Path": encodeURIComponent(path), "Content-Type": file.type || "application/octet-stream" },
-    file,
-    opts,
+  return withSlot(opts.signal, () =>
+    send<null>(
+      "PUT",
+      "/api/fs/put",
+      { "File-Path": encodeURIComponent(path), "Content-Type": file.type || "application/octet-stream" },
+      file,
+      opts,
+    ),
   )
 }
 
@@ -114,12 +166,14 @@ async function sendChunk(
   let flow = 0
   for (;;) {
     try {
-      await send<MultipartSession>(
-        "PUT",
-        "/api/fs/multipart/chunk",
-        { "X-Upload-Id": session.upload_id, "X-Chunk-Index": String(index), "Content-Type": "application/octet-stream" },
-        blob,
-        opts,
+      await withSlot(opts.signal, () =>
+        send<MultipartSession>(
+          "PUT",
+          "/api/fs/multipart/chunk",
+          { "X-Upload-Id": session.upload_id, "X-Chunk-Index": String(index), "Content-Type": "application/octet-stream" },
+          blob,
+          opts,
+        ),
       )
       return
     } catch (err) {
@@ -174,7 +228,7 @@ async function finish(session: MultipartSession, opts: UploadOptions): Promise<v
   }
 }
 
-function abortRemote(session: MultipartSession): void {
+export function abortRemote(session: MultipartSession): void {
   const token = getToken()
   void fetch("/api/fs/multipart/abort", {
     method: "POST",
@@ -253,21 +307,35 @@ async function putChunked(file: File, session: MultipartSession, opts: UploadOpt
   }
 }
 
+/** Starts the chunked session early; session is null when the file is small or the storage has no chunked upload. */
+export async function prepareUpload(path: string, file: File, signal: AbortSignal): Promise<Prepared> {
+  if (file.size <= CHUNK_SIZE) return { session: null, at: Date.now() }
+  const session = await send<MultipartSession | null>(
+    "POST",
+    "/api/fs/multipart/init",
+    { "File-Path": encodeURIComponent(path), "X-File-Size": String(file.size), "X-Chunk-Size": String(CHUNK_SIZE) },
+    null,
+    { signal },
+  )
+  return { session, at: Date.now() }
+}
+
 export async function uploadFile(path: string, file: File, opts: UploadOptions): Promise<void> {
   opts.onPhase?.("sending")
-  if (file.size > CHUNK_SIZE) {
-    // data: null means the storage has no chunked upload; fall through to the single request
-    const session = await send<MultipartSession | null>(
-      "POST",
-      "/api/fs/multipart/init",
-      { "File-Path": encodeURIComponent(path), "X-File-Size": String(file.size), "X-Chunk-Size": String(CHUNK_SIZE) },
-      null,
-      { signal: opts.signal },
-    )
-    if (session) {
-      if (session.state !== "completed") await putChunked(file, session, opts)
-      return opts.onProgress(file.size)
-    }
+  let prepared = opts.prepared
+  if (prepared?.session && opts.signal.aborted) {
+    abortRemote(prepared.session)
+    throw aborted()
+  }
+  if (!prepared || (prepared.session && Date.now() - prepared.at > PREPARED_MAX_AGE)) {
+    const stale = prepared?.session
+    prepared = await prepareUpload(path, file, opts.signal)
+    if (stale && stale.upload_id !== prepared.session?.upload_id) abortRemote(stale)
+  }
+  const { session } = prepared
+  if (session) {
+    if (session.state !== "completed") await putChunked(file, session, opts)
+    return opts.onProgress(file.size)
   }
   await putWhole(path, file, opts)
   opts.onProgress(file.size)

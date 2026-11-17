@@ -1,6 +1,6 @@
 import { markRaw, reactive } from "vue"
 import { api } from "@/api"
-import { uploadFile } from "@/api/upload"
+import { abortRemote, prepareUpload, uploadFile, type Prepared } from "@/api/upload"
 import { t } from "@/i18n"
 import { askConflict } from "@/stores/dialogs"
 import { passwordFor } from "@/stores/passwords"
@@ -23,12 +23,20 @@ export interface UploadItem {
   error: string
   batch: number
   controller: AbortController | null
+  /** Folders and multipart session prepared while the item waits in the queue. */
+  prep: Preparation | null
   /** "finishing" once all bytes are on the server and the storage is still writing the file. */
   phase: "sending" | "finishing"
   /** Epoch milliseconds when the upload was queued or last retried. */
   startedAt: number
   /** Epoch milliseconds when it reached a final state, 0 while pending. */
   endedAt: number
+}
+
+interface Preparation {
+  controller: AbortController
+  /** Never rejects; null when preparation failed and the upload prepares again itself. */
+  ready: Promise<Prepared | null>
 }
 
 export interface UploadSource {
@@ -43,7 +51,9 @@ export interface UploadSelection {
   dirs: string[]
 }
 
-const CONCURRENCY = 3
+const CONCURRENCY = 6
+/** Queued items whose folders and multipart session are prepared ahead of their turn. */
+const PREPARE_AHEAD = 4
 
 export const uploads = reactive<{ items: UploadItem[]; expanded: boolean }>({ items: [], expanded: true })
 
@@ -92,17 +102,37 @@ function settleBatch(batch: number): void {
   if (uploads.items.some((i) => i.batch === batch && i.status === "done")) listeners.forEach((fn) => fn(dir))
 }
 
+function prepareAhead(item: UploadItem): void {
+  const controller = new AbortController()
+  const ready = prepareDirs(item)
+    .then(() => prepareUpload(item.path, item.file, controller.signal))
+    .catch(() => null)
+  item.prep = markRaw({ controller, ready })
+}
+
+function dropPreparation(item: UploadItem): void {
+  const prep = item.prep
+  item.prep = null
+  if (!prep) return
+  prep.controller.abort()
+  void prep.ready.then((p) => p?.session && abortRemote(p.session))
+}
+
 async function run(item: UploadItem): Promise<void> {
-  const controller = markRaw(new AbortController())
+  const prep = item.prep
+  item.prep = null
+  const controller = prep?.controller ?? markRaw(new AbortController())
   item.controller = controller
   item.status = "uploading"
   item.error = ""
   item.loaded = 0
   item.phase = "sending"
   try {
-    await prepareDirs(item)
+    const prepared = prep ? await prep.ready : null
+    if (!prep) await prepareDirs(item)
     await uploadFile(item.path, item.file, {
       signal: controller.signal,
+      prepared: prepared ?? undefined,
       onProgress: (loaded) => (item.loaded = Math.min(loaded, item.size)),
       onPhase: (phase) => (item.phase = phase),
     })
@@ -125,13 +155,20 @@ async function run(item: UploadItem): Promise<void> {
 
 function pump(): void {
   for (const item of uploads.items) {
-    if (active() >= CONCURRENCY) return
+    if (active() >= CONCURRENCY) break
     if (item.status === "queued") void run(item)
+  }
+  let ahead = 0
+  for (const item of uploads.items) {
+    if (item.status !== "queued") continue
+    if (ahead++ >= PREPARE_AHEAD) break
+    if (!item.prep) prepareAhead(item)
   }
 }
 
 export function cancelUpload(item: UploadItem): void {
   if (item.status === "queued") {
+    dropPreparation(item)
     item.status = "cancelled"
     item.endedAt = Date.now()
     settleBatch(item.batch)
@@ -144,6 +181,7 @@ export function cancelAll(): void {
 
 export function retryUpload(item: UploadItem): void {
   if (item.status !== "failed" && item.status !== "cancelled") return
+  dropPreparation(item)
   item.status = "queued"
   item.error = ""
   item.loaded = 0
@@ -220,6 +258,7 @@ export async function enqueueUploads(dir: string, selection: UploadSelection): P
     error: "",
     batch,
     controller: null,
+    prep: null,
     phase: "sending",
     startedAt: Date.now(),
     endedAt: 0,
