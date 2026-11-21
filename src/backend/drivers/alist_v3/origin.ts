@@ -1,31 +1,53 @@
 export interface OriginLane { url: string; bytesPerSecond: number; key?: boolean }
-interface OriginGroup { base: string; lanes: OriginLane[] }
+interface OriginGroup { base?: string; mountPath?: string; rawOrigins: string[]; lanes: OriginLane[] }
 interface Measured { lane: OriginLane; latency: number; healthy: boolean }
+export interface OriginContext { baseUrl: string; mountPath?: string; kind: "api" | "raw" }
+
+export class OriginUnavailableError extends Error {}
 
 function groups(env: any): OriginGroup[] {
   try {
     const value = JSON.parse(env?.ALIST_ORIGIN_ROUTES || "[]")
     if (!Array.isArray(value)) return []
     return value.flatMap((group: any) => {
-      const base = new URL(group.base)
-      if (!/^https?:$/.test(base.protocol) || base.username || base.password || base.search || base.hash) return []
-      if (!Array.isArray(group.lanes)) return []
-      const lanes = group.lanes.flatMap((lane: any) => {
-        try {
-          const url = new URL(lane.url)
-          if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash || url.pathname !== "/") return []
-          if (!Number.isFinite(lane.bytesPerSecond) || lane.bytesPerSecond <= 0) return []
-          if (lane.key && !env?.ALIST_ORIGIN_KEY) return []
-          return [{ url: url.origin, bytesPerSecond: lane.bytesPerSecond, key: lane.key === true }]
-        } catch { return [] }
-      })
-      return lanes.length ? [{ base: base.origin, lanes }] : []
+      try {
+        const baseUrl = group.base ? new URL(group.base) : undefined
+        if (baseUrl && (!/^https?:$/.test(baseUrl.protocol) || baseUrl.username || baseUrl.password || baseUrl.search || baseUrl.hash)) return []
+        const mountPath = typeof group.mountPath === "string" && group.mountPath.startsWith("/") ? group.mountPath : undefined
+        if (!baseUrl && !mountPath) return []
+        if (!Array.isArray(group.lanes)) return []
+        const rawOrigins = Array.isArray(group.rawOrigins) ? group.rawOrigins.map((value: string) => {
+          const url = new URL(value)
+          if (!/^https?:$/.test(url.protocol) || url.username || url.password || url.pathname !== "/" || url.search || url.hash) throw new Error("Invalid raw origin")
+          return url.origin
+        }) : []
+        const lanes = group.lanes.flatMap((lane: any) => {
+          try {
+            const url = new URL(lane.url)
+            if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash || url.pathname !== "/") return []
+            if (!Number.isFinite(lane.bytesPerSecond) || lane.bytesPerSecond <= 0) return []
+            if (lane.key && !env?.ALIST_ORIGIN_KEY) return []
+            return [{ url: url.origin, bytesPerSecond: lane.bytesPerSecond, key: lane.key === true }]
+          } catch { return [] }
+        })
+        return lanes.length ? [{ base: baseUrl?.origin, mountPath, rawOrigins, lanes }] : []
+      } catch { return [] }
     })
   } catch { return [] }
 }
 
+function findGroup(env: any, context: OriginContext): OriginGroup | undefined {
+  let base: string
+  try { base = new URL(context.baseUrl).origin } catch { return undefined }
+  const all = groups(env)
+  return all.find((group) => group.mountPath && group.mountPath === context.mountPath) ||
+    all.find((group) => !group.mountPath && group.base === base)
+}
+
 function healthKey(lane: OriginLane): Request {
-  return new Request(`https://origin-health.invalid/${encodeURIComponent(lane.url)}?key=${lane.key ? 1 : 0}`)
+  const key = new URL(lane.url)
+  key.pathname = `/__openlist_origin_health__/${lane.key ? 1 : 0}`
+  return new Request(key)
 }
 
 async function cooldown(lane: OriginLane): Promise<void> {
@@ -34,8 +56,17 @@ async function cooldown(lane: OriginLane): Promise<void> {
   } catch {}
 }
 
-export function hasOriginRoute(url: string, env: any): boolean {
-  try { return groups(env).some((item) => item.base === new URL(url).origin) } catch { return false }
+export function hasOriginRoute(url: string, env: any, context?: OriginContext): boolean {
+  try {
+    const effective = context || { baseUrl: url, kind: "api" as const }
+    const group = findGroup(env, effective)
+    if (!group) return false
+    const target = new URL(url)
+    const base = new URL(effective.baseUrl)
+    if (effective.kind === "api") return target.origin === base.origin
+    return /^\/(d|p)(\/|$)/.test(target.pathname) &&
+      (target.origin === base.origin || group.rawOrigins.includes(target.origin))
+  } catch { return false }
 }
 
 async function probe(lane: OriginLane, secret: string): Promise<Measured> {
@@ -68,10 +99,11 @@ async function probe(lane: OriginLane, secret: string): Promise<Measured> {
 }
 
 export async function routedOriginFetch(
-  url: string, init: RequestInit, env: any, size = 0, retry = false, prepare?: () => void,
+  url: string, init: RequestInit, env: any, size = 0, retry = false, prepare?: () => void, context?: OriginContext,
 ): Promise<Response> {
   const target = new URL(url)
-  const group = groups(env).find((item) => item.base === target.origin)
+  const effective = context || { baseUrl: url, kind: "api" as const }
+  const group = hasOriginRoute(url, env, effective) ? findGroup(env, effective) : undefined
   if (!group) {
     prepare?.()
     return fetch(url, init)
@@ -82,13 +114,16 @@ export async function routedOriginFetch(
     a.latency + Math.max(0, size) * 1000 / a.lane.bytesPerSecond -
     b.latency - Math.max(0, size) * 1000 / b.lane.bytesPerSecond,
   )
-  if (!candidates.length) throw new Error("No reachable configured origin")
+  if (!candidates.length) throw new OriginUnavailableError("No reachable configured origin")
   let lastError: unknown
   for (const { lane } of candidates) {
     const headers = new Headers(init.headers)
     headers.delete("X-OpenList-Origin-Key")
     if (lane.key) headers.set("X-OpenList-Origin-Key", secret)
-    const destination = new URL(target.pathname + target.search, lane.url)
+    const destination = new URL(lane.url)
+    const prefix = effective.kind === "api" ? new URL(effective.baseUrl).pathname.replace(/\/+$/, "") : ""
+    destination.pathname = prefix && target.pathname.startsWith(prefix + "/") ? target.pathname.slice(prefix.length) : target.pathname
+    destination.search = target.search
     try {
       prepare?.()
       const response = await fetch(destination, { ...init, headers, redirect: "manual" })
@@ -106,5 +141,5 @@ export async function routedOriginFetch(
       if (!retry) throw error
     }
   }
-  throw lastError || new Error("No reachable configured origin")
+  throw new OriginUnavailableError(lastError instanceof Error ? lastError.message : "No reachable configured origin")
 }

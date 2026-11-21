@@ -1191,7 +1191,7 @@ async function createDriver(
       } catch (e) {
         console.warn("[alist_v3] failed to persist token:", e)
       }
-    }, getEnvCtx)
+    }, getEnvCtx, storageConfig?.mount_path)
     await driver.init?.()
   } else if (normDriver === "urltree" || normDriver === "urlstree") {
     const addition = parseAddition(storageConfig)

@@ -1,5 +1,5 @@
 import { Hono } from "hono"
-import { hasOriginRoute, routedOriginFetch } from "../drivers/alist_v3/origin"
+import { hasOriginRoute, routedOriginFetch, OriginUnavailableError, type OriginContext } from "../drivers/alist_v3/origin"
 import { getSettings, resolvePath } from "../internal/model/db"
 import { parseRangeHeader } from "../internal/stream/stream"
 import { flushPendingDriverState, getDriver } from "../internal/op/storage"
@@ -78,11 +78,19 @@ const SAFE_REDIRECT_HEADER_KEYS = new Set([
   "referer",
 ])
 
+function originContext(storage: any): OriginContext | undefined {
+  try {
+    const addition = typeof storage?.addition === "string" ? JSON.parse(storage.addition) : storage?.addition
+    if (typeof addition?.url !== "string") return undefined
+    return { baseUrl: addition.url, mountPath: storage.mount_path, kind: "raw" }
+  } catch { return undefined }
+}
+
 export async function safeProxyFetch(
   url: string,
   headers: Record<string, string>,
   allowHosts?: ReadonlySet<string> | string[],
-  route?: { env: any; size: number },
+  route?: { env: any; size: number; context: OriginContext },
 ): Promise<Response> {
   const MAX_REDIRECTS = 5
   let current = url
@@ -96,7 +104,7 @@ export async function safeProxyFetch(
 
     const init: RequestInit = { headers: currentHeaders, redirect: "manual" }
     const res = i === 0 && route
-      ? await routedOriginFetch(current, init, route.env, route.size, true)
+      ? await routedOriginFetch(current, init, route.env, route.size, true, undefined, route.context)
       : await fetch(current, init)
 
     const location = res.headers.get("location")
@@ -139,7 +147,7 @@ function payloadLimitMessage(c: any, label: string, size: number): string {
 // 原生代理：拉取上游直链并回传字节流（含 Range、缓存头、CORS）。
 // 抽成独立函数是因为「webdav_policy=use_proxy_url 但未配置 down_proxy_url」
 // 与「驱动强制代理」两种情况都需要走同一套实现。
-async function proxyUpstream(
+export async function proxyUpstream(
   c: any,
   fileItem: any,
   reqPath: string,
@@ -219,10 +227,13 @@ async function proxyUpstream(
   const routeSize = proxyRange && c.req.header("Range") && Number(fileItem.size) > 0
     ? parseRangeHeader(c.req.header("Range"), Number(fileItem.size)).chunksize
     : Number(fileItem.size) || 0
+  const routeContext = /^(alistv3|alist|alistv2)$/.test(driver.toLowerCase().replace(/[^a-z0-9]/g, "")) ? originContext(opts.storage) : undefined
+  const route = routeContext ? { env: c.env, size: routeSize, context: routeContext } : undefined
   let upstreamRes: Response
   try {
-    upstreamRes = await safeProxyFetch(fileItem.raw_url, headers, trustedHosts, /^(alistv3|alist|alistv2)$/.test(driver.toLowerCase().replace(/[^a-z0-9]/g, "")) ? { env: c.env, size: routeSize } : undefined)
+    upstreamRes = await safeProxyFetch(fileItem.raw_url, headers, trustedHosts, route)
   } catch (ssrfErr: any) {
+    if (ssrfErr instanceof OriginUnavailableError) return c.text("Origin unavailable", 502)
     return c.text(ssrfErr.message || "SSRF blocked", 403)
   }
 
@@ -234,7 +245,12 @@ async function proxyUpstream(
       `[rawRouter] Upstream ignored/refused Range (status=${upstreamRes.status}) for '${reqPath}', retrying without Range header...`,
     )
     delete headers["Range"]
-    upstreamRes = await safeProxyFetch(fileItem.raw_url, headers, trustedHosts, /^(alistv3|alist|alistv2)$/.test(driver.toLowerCase().replace(/[^a-z0-9]/g, "")) ? { env: c.env, size: routeSize } : undefined)
+    try {
+      upstreamRes = await safeProxyFetch(fileItem.raw_url, headers, trustedHosts, route)
+    } catch (error: any) {
+      if (error instanceof OriginUnavailableError) return c.text("Origin unavailable", 502)
+      throw error
+    }
   }
 
   // ---- 二次校验：按上游实际回传的大小再判一次 ----
@@ -589,7 +605,7 @@ rawRouter.get("/*", async (c) => {
               )
             }
 
-            if (decision.needsProxy || (/^(alistv3|alist|alistv2)$/.test(normDriver) && hasOriginRoute(fileItem.raw_url, c.env))) {
+            if (decision.needsProxy || (/^(alistv3|alist|alistv2)$/.test(normDriver) && originContext(resolved.storage) && hasOriginRoute(fileItem.raw_url, c.env, originContext(resolved.storage)))) {
               return proxyUpstream(
                 c,
                 fileItem,

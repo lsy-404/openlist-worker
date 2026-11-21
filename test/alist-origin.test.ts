@@ -101,3 +101,59 @@ test("failed route cools down and is probed again after expiry", async () => {
     assert.equal(probes, 4)
   } finally { globalThis.fetch = oldFetch; (globalThis as any).caches = originalCaches; Date.now = oldNow }
 })
+
+test("configured origin cannot be replaced by a double-slash pathname", async () => {
+  const oldFetch = globalThis.fetch
+  let destination = ""
+  let sentKey: string | null = null
+  globalThis.fetch = (async (input: any, init: any) => {
+    const url = String(input)
+    if (url.endsWith("/api/public/settings")) return Response.json({ code: 200, data: {} })
+    sentKey = new Headers(init.headers).get("X-OpenList-Origin-Key")
+    destination = url
+    return new Response("ok")
+  }) as typeof fetch
+  try {
+    await routedOriginFetch("https://base.example//attacker.example/file", {}, env)
+    assert.equal(new URL(destination).origin, "https://fast.example")
+    assert.equal(new URL(destination).pathname, "//attacker.example/file")
+    assert.equal(sentKey, "secret")
+  } finally { globalThis.fetch = oldFetch }
+})
+
+test("mount routing strips the original node prefix and scopes download aliases", async () => {
+  const { AListV3Driver } = await import("../src/backend/drivers/alist_v3/driver")
+  const { hasOriginRoute } = await import("../src/backend/drivers/alist_v3/origin")
+  const mountEnv = { ALIST_ORIGIN_ROUTES: JSON.stringify([{ mountPath: "/server/home", rawOrigins: ["https://download.example"], lanes: [{ url: "https://private.example", bytesPerSecond: 1000 }] }]) }
+  const oldFetch = globalThis.fetch
+  const urls: string[] = []
+  globalThis.fetch = (async (input: any) => {
+    const url = String(input); urls.push(url)
+    if (url.endsWith("/api/public/settings")) return Response.json({ code: 200, data: {} })
+    return Response.json({ code: 200, data: { name: "file", size: 1, is_dir: false, raw_url: "https://download.example/d/file" } })
+  }) as typeof fetch
+  try {
+    const driver = new AListV3Driver({ url: "https://base.example/secret-prefix" }, undefined, () => mountEnv, "/server/home")
+    await driver.get("/file", "/file")
+    assert.ok(urls.includes("https://private.example/api/fs/get"))
+    const context = { baseUrl: "https://base.example/secret-prefix", mountPath: "/server/home", kind: "raw" as const }
+    assert.equal(hasOriginRoute("https://download.example/d/file", mountEnv, context), true)
+    assert.equal(hasOriginRoute("https://other.example/d/file", mountEnv, context), false)
+    assert.equal(hasOriginRoute("https://download.example/api/file", mountEnv, context), false)
+    assert.equal(hasOriginRoute("https://download.example/d/file", mountEnv, { ...context, mountPath: "/different" }), false)
+  } finally { globalThis.fetch = oldFetch }
+})
+
+test("download reports origin failure as 502 and blocked URLs as 403", async () => {
+  const { proxyUpstream } = await import("../src/backend/server/raw")
+  const oldFetch = globalThis.fetch
+  globalThis.fetch = (async () => { throw new Error("unreachable") }) as typeof fetch
+  const c: any = { env, req: { header: () => undefined }, text: (message: string, status: number) => new Response(message, { status }) }
+  const options = { driver: "AListV3", storage: { mount_path: "/node", addition: JSON.stringify({ url: "https://base.example" }) } }
+  try {
+    const unavailable = await proxyUpstream(c, { raw_url: "https://base.example/d/file", size: 1 }, "/file", undefined, options)
+    assert.equal(unavailable.status, 502)
+    const blocked = await proxyUpstream(c, { raw_url: "http://127.0.0.1/d/file", size: 1 }, "/file", undefined, options)
+    assert.equal(blocked.status, 403)
+  } finally { globalThis.fetch = oldFetch }
+})

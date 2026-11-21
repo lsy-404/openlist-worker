@@ -25,20 +25,29 @@ export class AListV3Driver implements StorageDriver {
   private token: string
   private onTokenUpdate?: (token: string) => void
   private originEnv?: () => any
+  private mountPath?: string
 
   constructor(
     addition: AListV3Addition,
     onTokenUpdate?: (token: string) => void,
     originEnv?: () => any,
+    mountPath?: string,
   ) {
     this.addition = addition || {}
     this.token = this.addition.token || ""
+    this.mountPath = mountPath
     this.originEnv = originEnv
     this.onTokenUpdate = onTokenUpdate
   }
 
   private get baseUrl(): string {
     return (this.addition.url || "").replace(/\/+$/, "")
+  }
+
+  private originFetch(url: string, init: RequestInit, size = 0, retry = false, prepare?: () => void): Promise<Response> {
+    return routedOriginFetch(url, init, this.originEnv?.(), size, retry, prepare, {
+      baseUrl: this.baseUrl, mountPath: this.mountPath, kind: "api",
+    })
   }
 
   async init(): Promise<void> {
@@ -83,14 +92,14 @@ export class AListV3Driver implements StorageDriver {
     body?: any,
     retry = true,
   ): Promise<T> {
-    const res = await routedOriginFetch(`${this.baseUrl}/api${api}`, {
+    const res = await this.originFetch(`${this.baseUrl}/api${api}`, {
       method,
       headers: {
         "Content-Type": "application/json",
         ...(this.token ? { Authorization: this.token } : {}),
       },
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-    }, this.originEnv?.(), 0, api === "/me" || api === "/fs/list" || api === "/fs/get")
+    }, 0, api === "/me" || api === "/fs/list" || api === "/fs/get")
     const data: AListResp<T> = await res.json().catch(() => ({
       code: res.status,
       message: "invalid response",
@@ -237,7 +246,7 @@ export class AListV3Driver implements StorageDriver {
     const { readable, writable } = new (globalThis as any).FixedLengthStream(size)
     let piping: Promise<void> | undefined
     const mtime = modified ? Date.parse(modified) : NaN
-    const res = await routedOriginFetch(`${this.baseUrl}/api/fs/put`, {
+    const res = await this.originFetch(`${this.baseUrl}/api/fs/put`, {
       method: "PUT",
       headers: {
         Authorization: this.token,
@@ -248,7 +257,7 @@ export class AListV3Driver implements StorageDriver {
       },
       body: readable,
       signal,
-    }, this.originEnv?.(), size, false, () => {
+    }, size, false, () => {
       piping = body.pipeTo(writable, { signal }).catch(() => {})
     })
     await piping
@@ -286,12 +295,12 @@ export class AListV3Driver implements StorageDriver {
       payload = readable
       writableStream = writable
     }
-    const res = await routedOriginFetch(`${this.baseUrl}/api${api}`, {
+    const res = await this.originFetch(`${this.baseUrl}/api${api}`, {
       method,
       headers: { ...(this.token ? { Authorization: this.token } : {}), ...headers },
       body: payload,
       signal,
-    }, this.originEnv?.(), size || 0, method === "GET", body ? () => {
+    }, size || 0, method === "GET", body ? () => {
       piping = body.pipeTo(writableStream!, { signal }).catch(() => {})
     } : undefined)
     await piping
@@ -373,17 +382,17 @@ export class AListV3Driver implements StorageDriver {
 
   /** Direct-upload target reported by the node for its own storage; null when the storage has none. */
   async getDirectUploadInfo(physicalDir: string, fileName: string, fileSize: number): Promise<any | null> {
-    const res = await routedOriginFetch(`${this.baseUrl}/api/fs/get_direct_upload_info`, {
+    const res = await this.originFetch(`${this.baseUrl}/api/fs/get_direct_upload_info`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...(this.token ? { Authorization: this.token } : {}) },
       body: JSON.stringify({ path: physicalDir, file_name: fileName, file_size: fileSize, tool: "" }),
-    }, this.originEnv?.())
+    })
     const data: AListResp<any> = await res.json().catch(() => ({ code: res.status, message: "", data: null }))
     return data.code === 200 ? data.data ?? null : null
   }
 
   async put(_v: string, physicalPath: string, content: Uint8Array): Promise<void> {
-    const res = await routedOriginFetch(`${this.baseUrl}/api/fs/put`, {
+    const res = await this.originFetch(`${this.baseUrl}/api/fs/put`, {
       method: "PUT",
       headers: {
         Authorization: this.token,
@@ -391,7 +400,7 @@ export class AListV3Driver implements StorageDriver {
         "Content-Type": "application/octet-stream",
       },
       body: content as any,
-    }, this.originEnv?.(), content.byteLength)
+    }, content.byteLength)
     const data: AListResp<any> = await res.json().catch(() => ({
       code: res.status,
       message: "invalid response",
