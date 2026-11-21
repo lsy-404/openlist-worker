@@ -1,5 +1,5 @@
 import { sharedOrOwn } from "../../pkg/inflight"
-import { resolvePath, getDb, getSettings, saveDb } from "../model/db"
+import { resolvePath, getDb, getSettings, saveDb, getEnvCtx } from "../model/db"
 import { isSafeUrl } from "../../pkg/http"
 import { encodeDownloadPath } from "../../pkg/path"
 import { canUseProxyEndpoint, normalizeExtList } from "../driver/proxy"
@@ -1191,7 +1191,7 @@ async function createDriver(
       } catch (e) {
         console.warn("[alist_v3] failed to persist token:", e)
       }
-    })
+    }, getEnvCtx)
     await driver.init?.()
   } else if (normDriver === "urltree" || normDriver === "urlstree") {
     const addition = parseAddition(storageConfig)

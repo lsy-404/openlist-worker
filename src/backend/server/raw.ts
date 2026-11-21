@@ -1,4 +1,5 @@
 import { Hono } from "hono"
+import { hasOriginRoute, routedOriginFetch } from "../drivers/alist_v3/origin"
 import { getSettings, resolvePath } from "../internal/model/db"
 import { parseRangeHeader } from "../internal/stream/stream"
 import { flushPendingDriverState, getDriver } from "../internal/op/storage"
@@ -81,6 +82,7 @@ export async function safeProxyFetch(
   url: string,
   headers: Record<string, string>,
   allowHosts?: ReadonlySet<string> | string[],
+  route?: { env: any; size: number },
 ): Promise<Response> {
   const MAX_REDIRECTS = 5
   let current = url
@@ -92,10 +94,10 @@ export async function safeProxyFetch(
       throw new Error(e?.message || "SSRF blocked: restricted destination")
     }
 
-    const res = await fetch(current, {
-      headers: currentHeaders,
-      redirect: "manual",
-    })
+    const init: RequestInit = { headers: currentHeaders, redirect: "manual" }
+    const res = i === 0 && route
+      ? await routedOriginFetch(current, init, route.env, route.size, true)
+      : await fetch(current, init)
 
     const location = res.headers.get("location")
     if (res.status >= 300 && res.status < 400 && location) {
@@ -214,9 +216,12 @@ async function proxyUpstream(
     ignoreHeaders: opts.ignoreHeaders,
   })
 
+  const routeSize = proxyRange && c.req.header("Range") && Number(fileItem.size) > 0
+    ? parseRangeHeader(c.req.header("Range"), Number(fileItem.size)).chunksize
+    : Number(fileItem.size) || 0
   let upstreamRes: Response
   try {
-    upstreamRes = await safeProxyFetch(fileItem.raw_url, headers, trustedHosts)
+    upstreamRes = await safeProxyFetch(fileItem.raw_url, headers, trustedHosts, /^(alistv3|alist|alistv2)$/.test(driver.toLowerCase().replace(/[^a-z0-9]/g, "")) ? { env: c.env, size: routeSize } : undefined)
   } catch (ssrfErr: any) {
     return c.text(ssrfErr.message || "SSRF blocked", 403)
   }
@@ -229,7 +234,7 @@ async function proxyUpstream(
       `[rawRouter] Upstream ignored/refused Range (status=${upstreamRes.status}) for '${reqPath}', retrying without Range header...`,
     )
     delete headers["Range"]
-    upstreamRes = await safeProxyFetch(fileItem.raw_url, headers, trustedHosts)
+    upstreamRes = await safeProxyFetch(fileItem.raw_url, headers, trustedHosts, /^(alistv3|alist|alistv2)$/.test(driver.toLowerCase().replace(/[^a-z0-9]/g, "")) ? { env: c.env, size: routeSize } : undefined)
   }
 
   // ---- 二次校验：按上游实际回传的大小再判一次 ----
@@ -584,7 +589,7 @@ rawRouter.get("/*", async (c) => {
               )
             }
 
-            if (decision.needsProxy) {
+            if (decision.needsProxy || (/^(alistv3|alist|alistv2)$/.test(normDriver) && hasOriginRoute(fileItem.raw_url, c.env))) {
               return proxyUpstream(
                 c,
                 fileItem,
